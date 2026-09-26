@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
 	MapContainer,
-	TileLayer,
 	Marker,
 	Popup,
 } from "react-leaflet";
@@ -15,6 +14,7 @@ import {
 	createSubdivision,
 	listSubdivisions,
 } from "../../services";
+
 import { WEST_BENGAL_BOUNDS } from "../../constants/mapBounds";
 
 
@@ -172,11 +172,21 @@ function SubdivisionLocation() {
 			district
 		);
 
-		setSelectedDistrict(district);
 
 		/*
-		 * Clear previously selected subdivision
-		 */
+		|--------------------------------------------------------------------------
+		| Store selected district
+		|--------------------------------------------------------------------------
+		*/
+
+		setSelectedDistrict(district);
+
+
+		/*
+		|--------------------------------------------------------------------------
+		| Clear previous subdivision
+		|--------------------------------------------------------------------------
+		*/
 
 		setSelectedSubdivision(null);
 
@@ -184,16 +194,20 @@ function SubdivisionLocation() {
 
 
 		/*
-		 * Update form
-		 */
+		|--------------------------------------------------------------------------
+		| Update form
+		|--------------------------------------------------------------------------
+		*/
 
 		setForm((previous) => ({
 
 			...previous,
 
-			district_id: district.id,
+			district_id:
+				district.id || "",
 
-			district: district.name,
+			district:
+				district.name || "",
 
 			name: "",
 
@@ -222,6 +236,12 @@ function SubdivisionLocation() {
 		);
 
 
+		/*
+		|--------------------------------------------------------------------------
+		| Store selected subdivision
+		|--------------------------------------------------------------------------
+		*/
+
 		setSelectedSubdivision(
 			subdivision
 		);
@@ -229,8 +249,12 @@ function SubdivisionLocation() {
 
 		/*
 		|--------------------------------------------------------------------------
-		| Update Form
+		| Update form
 		|--------------------------------------------------------------------------
+		|
+		| Latitude and longitude come directly
+		| from the exact mouse click.
+		|
 		*/
 
 		setForm((previous) => ({
@@ -238,7 +262,9 @@ function SubdivisionLocation() {
 			...previous,
 
 			district_id:
-				subdivision.districtId,
+				subdivision.districtId ||
+				selectedDistrict?.id ||
+				"",
 
 			district:
 				selectedDistrict?.name ||
@@ -264,11 +290,11 @@ function SubdivisionLocation() {
 
 		/*
 		|--------------------------------------------------------------------------
-		| Update Marker
+		| Place Marker
 		|--------------------------------------------------------------------------
 		|
-		| Marker is placed at the exact mouse
-		| click position.
+		| Marker is placed at the exact location
+		| where the subdivision polygon was clicked.
 		|
 		*/
 
@@ -287,6 +313,10 @@ function SubdivisionLocation() {
 
 			});
 
+		} else {
+
+			setPosition(null);
+
 		}
 
 	};
@@ -302,14 +332,23 @@ function SubdivisionLocation() {
 
 		event.preventDefault();
 
+
 		/*
-		 * Basic validation
-		 */
+		|--------------------------------------------------------------------------
+		| Validation
+		|--------------------------------------------------------------------------
+		*/
 
 		if (!form.district_id) {
-			alert("Please select a district.");
+
+			alert(
+				"Please select a district."
+			);
+
 			return;
+
 		}
+
 
 		if (!form.district) {
 
@@ -373,10 +412,13 @@ function SubdivisionLocation() {
 
 
 				/*
-				 * Reset form
-				 */
+				|--------------------------------------------------------------------------
+				| Reset Form
+				|--------------------------------------------------------------------------
+				*/
 
 				setForm({
+
 					district_id: "",
 
 					district: "",
@@ -393,8 +435,10 @@ function SubdivisionLocation() {
 
 
 				/*
-				 * Reset map selection
-				 */
+				|--------------------------------------------------------------------------
+				| Reset Map Selection
+				|--------------------------------------------------------------------------
+				*/
 
 				setPosition(null);
 
@@ -404,8 +448,10 @@ function SubdivisionLocation() {
 
 
 				/*
-				 * Reload table
-				 */
+				|--------------------------------------------------------------------------
+				| Reload Table
+				|--------------------------------------------------------------------------
+				*/
 
 				loadSubdivisions();
 
@@ -425,10 +471,6 @@ function SubdivisionLocation() {
 				error
 			);
 
-
-			/*
-			 * Try to show API error message
-			 */
 
 			const message =
 				error?.response?.data?.message ||
@@ -455,6 +497,7 @@ function SubdivisionLocation() {
 	const handleReset = () => {
 
 		setForm({
+
 			district_id: "",
 
 			district: "",
@@ -468,6 +511,7 @@ function SubdivisionLocation() {
 			longitude: "",
 
 		});
+
 
 		setPosition(null);
 
@@ -486,14 +530,14 @@ function SubdivisionLocation() {
 
 	return (
 
-		<div className="min-h-screen w-full bg-gray-50 p-6">
+		<div className="relative min-h-screen w-full bg-gray-50 p-6">
 
 
 			{/* =====================================================
-          Header
-      ====================================================== */}
+                Page Header
+            ====================================================== */}
 
-			<div className="mb-6">
+			<div className="relative z-20 mb-6">
 
 				<h1 className="text-2xl font-semibold text-gray-800">
 					Subdivision Location
@@ -507,15 +551,15 @@ function SubdivisionLocation() {
 
 
 			{/* =====================================================
-          Main Layout
-      ====================================================== */}
+                Main Layout
+            ====================================================== */}
 
-			<div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
+			<div className="relative z-0 grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
 
 
 				{/* ===================================================
-            Form
-        ==================================================== */}
+                    Form
+                ==================================================== */}
 
 				<div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
 
@@ -542,16 +586,15 @@ function SubdivisionLocation() {
 								type="text"
 								name="district"
 								value={form.district}
-								onChange={handleChange}
 								readOnly
 								placeholder="Select district from map"
-								className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+								className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm outline-none"
 							/>
 
 						</div>
 
 
-						{/* Subdivision Name */}
+						{/* Subdivision */}
 
 						<div>
 
@@ -563,10 +606,9 @@ function SubdivisionLocation() {
 								type="text"
 								name="name"
 								value={form.name}
-								onChange={handleChange}
 								readOnly
 								placeholder="Select subdivision from map"
-								className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+								className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm outline-none"
 							/>
 
 						</div>
@@ -610,9 +652,9 @@ function SubdivisionLocation() {
 									step="any"
 									name="latitude"
 									value={form.latitude}
-									onChange={handleChange}
-									placeholder="Latitude"
-									className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+									readOnly
+									placeholder="Select from map"
+									className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm outline-none"
 								/>
 
 							</div>
@@ -631,9 +673,9 @@ function SubdivisionLocation() {
 									step="any"
 									name="longitude"
 									value={form.longitude}
-									onChange={handleChange}
-									placeholder="Longitude"
-									className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+									readOnly
+									placeholder="Select from map"
+									className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm outline-none"
 								/>
 
 							</div>
@@ -664,7 +706,9 @@ function SubdivisionLocation() {
 								disabled={saving}
 								className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
 							>
+
 								Reset
+
 							</button>
 
 						</div>
@@ -675,15 +719,15 @@ function SubdivisionLocation() {
 
 
 				{/* ===================================================
-            Map
-        ==================================================== */}
+                    Map
+                ==================================================== */}
 
-				<div className="relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+				<div className="relative z-0 isolate overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
 
 					{/* Map Header */}
 
-					<div className="border-b border-gray-200 px-5 py-4">
+					<div className="relative z-20 border-b border-gray-200 bg-white px-5 py-4">
 
 						<h2 className="text-lg font-semibold text-gray-800">
 							Subdivision Map
@@ -704,7 +748,7 @@ function SubdivisionLocation() {
 
 					{/* Map */}
 
-					<div className="relative h-[600px] w-full">
+					<div className="relative z-0 h-[600px] w-full">
 
 						<MapContainer
 							center={[22.5726, 88.3639]}
@@ -718,17 +762,23 @@ function SubdivisionLocation() {
 						>
 
 
-							{/* District */}
+							{/* =================================================
+                                District Layer
+                            ================================================== */}
 
 							<DistrictLayer
-								selectedDistrict={selectedDistrict}
+								selectedDistrict={
+									selectedDistrict
+								}
 								onDistrictSelect={
 									handleDistrictSelect
 								}
 							/>
 
 
-							{/* Subdivision */}
+							{/* =================================================
+                                Subdivision Layer
+                            ================================================== */}
 
 							{selectedDistrict && (
 
@@ -744,7 +794,9 @@ function SubdivisionLocation() {
 							)}
 
 
-							{/* Marker */}
+							{/* =================================================
+                                Marker
+                            ================================================== */}
 
 							{position && (
 
@@ -760,12 +812,13 @@ function SubdivisionLocation() {
 										<div className="text-sm">
 
 											<p className="font-semibold">
-												{form.name}
+												{form.name ||
+													"Selected Subdivision"}
 											</p>
 
 											<p>
 												District:{" "}
-												{form.district}
+												{form.district || "-"}
 											</p>
 
 											<p>
@@ -791,9 +844,11 @@ function SubdivisionLocation() {
 					</div>
 
 
-					{/* Coordinates */}
+					{/* =================================================
+                        Coordinates
+                    ================================================== */}
 
-					<div className="grid grid-cols-2 border-t border-gray-200">
+					<div className="relative z-20 grid grid-cols-2 border-t border-gray-200 bg-white">
 
 						<div className="px-5 py-4">
 
@@ -828,10 +883,10 @@ function SubdivisionLocation() {
 
 
 			{/* =====================================================
-          Subdivision Table
-      ====================================================== */}
+                Subdivision Table
+            ====================================================== */}
 
-			<div className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm">
+			<div className="relative z-0 mt-6 rounded-xl border border-gray-200 bg-white shadow-sm">
 
 
 				{/* Table Header */}
@@ -946,7 +1001,7 @@ function SubdivisionLocation() {
 									{subdivisions.length > 0 ? (
 
 										subdivisions.map(
-											(subdivision) => (
+											(subdivision, index) => (
 
 												<tr
 													key={
@@ -956,11 +1011,11 @@ function SubdivisionLocation() {
 												>
 
 
-													{/* ID */}
+													{/* S.No. */}
 
 													<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
 
-														{subdivision.id}
+														{index + 1}
 
 													</td>
 
@@ -1025,7 +1080,7 @@ function SubdivisionLocation() {
 										<tr>
 
 											<td
-												colSpan="7"
+												colSpan="6"
 												className="px-5 py-8 text-center text-sm text-gray-500"
 											>
 

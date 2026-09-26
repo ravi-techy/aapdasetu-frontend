@@ -89,6 +89,17 @@ function SubdivisionLayer({
         const districtId =
             properties.dist_lgd;
 
+        /*
+        |--------------------------------------------------------------------------
+        | District Name
+        |--------------------------------------------------------------------------
+        */
+
+        const districtName =
+            properties.dtname ??
+            properties.district ??
+            selectedDistrict?.name ??
+            "";
 
         /*
         |--------------------------------------------------------------------------
