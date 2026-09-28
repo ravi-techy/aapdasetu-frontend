@@ -13,56 +13,7 @@ import DistrictLayer from "../../components/map/DistrictLayer";
 import { createDistrict, listDistricts } from "../../services";
 import LocationMarker from "../../components/map/LocationMarker";
 import { WEST_BENGAL_BOUNDS } from "../../constants/mapBounds";
-
-
-/*
-|--------------------------------------------------------------------------
-| Map Location Marker
-|--------------------------------------------------------------------------
-*/
-
-// function LocationMarker({ position, setPosition, selectedDistrict }) {
-// 	useMapEvents({
-// 		click(event) {
-// 			const { lat, lng } = event.latlng;
-
-// 			setPosition({
-// 				lat,
-// 				lng,
-// 			});
-// 		},
-// 	});
-
-// 	if (!position) {
-// 		return null;
-// 	}
-
-// 	return (
-// 		<Marker
-// 			position={[
-// 				position.lat,
-// 				position.lng,
-// 			]}
-// 		>
-// 			<Popup>
-// 				<div className="text-sm">
-// 					<p className="font-semibold">
-// 						Selected Location
-// 					</p>
-
-// 					<p>
-// 						Latitude: {position.lat.toFixed(6)}
-// 					</p>
-
-// 					<p>
-// 						Longitude: {position.lng.toFixed(6)}
-// 					</p>
-// 				</div>
-// 			</Popup>
-// 		</Marker>
-// 	);
-// }
-
+import { Pencil, Trash2 } from "lucide-react";
 
 /*
 |--------------------------------------------------------------------------
@@ -81,15 +32,9 @@ function DistrictLocation() {
 
 	const [position, setPosition] = useState(null);
 	const [selectedDistrict, setSelectedDistrict] = useState(null);
-	// const [districtData, setDistrictData] = useState(null);
 	const [districts, setDistricts] = useState([]);
 	const [loadingDistricts, setLoadingDistricts] = useState(false);
 	const [districtError, setDistrictError] = useState("");
-
-	// const WEST_BENGAL_BOUNDS = [
-	// 	[21.45, 85.75], // South-West
-	// 	[27.25, 89.90], // North-East
-	// ];
 
 	/*
 	|--------------------------------------------------------------------------
@@ -240,6 +185,7 @@ function DistrictLocation() {
 			console.error("District list error:", error);
 
 			setDistrictError(
+				error?.message ||
 				"Unable to load district list."
 			);
 		} finally {
@@ -250,29 +196,6 @@ function DistrictLocation() {
 	useEffect(() => {
 		loadDistricts();
 	}, []);
-
-	// useEffect(() => {
-	// 	fetch("/gis/districts.geojson")
-	// 		.then((response) => {
-	// 			if (!response.ok) {
-	// 				throw new Error(
-	// 					`Failed to load districts: ${response.status}`
-	// 				);
-	// 			}
-
-	// 			return response.json();
-	// 		})
-	// 		.then((data) => {
-	// 			// console.log("District GeoJSON:", data);
-	// 			setDistrictData(data);
-	// 		})
-	// 		.catch((error) => {
-	// 			console.error(
-	// 				"District GeoJSON error:",
-	// 				error
-	// 			);
-	// 		});
-	// }, []);
 
 	const handleDistrictSelect = (district) => {
 
@@ -328,6 +251,32 @@ function DistrictLocation() {
 				district.longitude?.toFixed(6) || "",
 
 		}));
+
+	};
+
+	const handleEditDistrict = (district) => {
+
+		console.log(
+			"Edit district:",
+			district
+		);
+
+	};
+
+	const handleDeleteDistrict = (district) => {
+
+		const confirmed = window.confirm(
+			`Are you sure you want to delete "${district.name}"?`
+		);
+
+		if (!confirmed) {
+			return;
+		}
+
+		console.log(
+			"Delete district:",
+			district
+		);
 
 	};
 
@@ -657,7 +606,7 @@ function DistrictLocation() {
 				{!loadingDistricts && !districtError && (
 					<div className="overflow-x-auto">
 
-						<table className="min-w-[1000px] divide-y divide-gray-200">
+						<table className="min-w-[1150px] divide-y divide-gray-200">
 
 							<thead className="bg-gray-50">
 
@@ -687,6 +636,12 @@ function DistrictLocation() {
 										Storage Location
 									</th>
 
+									{/* Action */}
+
+									<th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">
+										Action
+									</th>
+
 								</tr>
 
 							</thead>
@@ -703,28 +658,78 @@ function DistrictLocation() {
 											className="transition hover:bg-gray-50"
 										>
 
+											{/* S.No. */}
+
 											<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
 												{index + 1}
 											</td>
+
+
+											{/* District */}
 
 											<td className="whitespace-nowrap px-5 py-4 text-sm font-medium text-gray-800">
 												{district.name}
 											</td>
 
+
+											{/* Address */}
+
 											<td className="px-5 py-4 text-sm text-gray-600">
 												{district.address || "-"}
 											</td>
+
+
+											{/* Latitude */}
 
 											<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
 												{district.latitude || "-"}
 											</td>
 
+
+											{/* Longitude */}
+
 											<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
 												{district.longitude || "-"}
 											</td>
 
+
+											{/* Storage Location */}
+
 											<td className="px-5 py-4 text-sm text-gray-600">
 												{district.storage_location || "-"}
+											</td>
+
+
+											{/* Actions */}
+
+											<td className="whitespace-nowrap px-5 py-4">
+												<div className="flex items-center justify-center gap-2">
+
+													{/* Edit */}
+													<button
+														type="button"
+														onClick={() =>
+															handleEditDistrict(district)
+														}
+														title="Edit District"
+														className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 transition hover:bg-blue-100"
+													>
+														<Pencil size={17} strokeWidth={2} />
+													</button>
+
+													{/* Delete */}
+													<button
+														type="button"
+														onClick={() =>
+															handleDeleteDistrict(district)
+														}
+														title="Delete District"
+														className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+													>
+														<Trash2 size={17} strokeWidth={2} />
+													</button>
+
+												</div>
 											</td>
 
 										</tr>
@@ -736,7 +741,7 @@ function DistrictLocation() {
 									<tr>
 
 										<td
-											colSpan="6"
+											colSpan="7"
 											className="px-5 py-8 text-center text-sm text-gray-500"
 										>
 											No districts found.
