@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
 	MapContainer,
-	// TileLayer,
 	Marker,
 	Popup,
 	useMapEvents,
@@ -10,10 +9,10 @@ import {
 
 import "leaflet/dist/leaflet.css";
 import DistrictLayer from "../../components/map/DistrictLayer";
-import { createDistrict, listDistricts } from "../../services";
+import { createDistrict, deleteDistrict, listDistricts, updateDistrict } from "../../services";
 import LocationMarker from "../../components/map/LocationMarker";
 import { WEST_BENGAL_BOUNDS } from "../../constants/mapBounds";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Check, X } from "lucide-react";
 
 /*
 |--------------------------------------------------------------------------
@@ -35,6 +34,23 @@ function DistrictLocation() {
 	const [districts, setDistricts] = useState([]);
 	const [loadingDistricts, setLoadingDistricts] = useState(false);
 	const [districtError, setDistrictError] = useState("");
+
+	const [editingDistrictId, setEditingDistrictId] = useState(null);
+	const [editForm, setEditForm] = useState({
+		name: "",
+		address: "",
+		latitude: "",
+		longitude: "",
+		storage_location: "",
+	});
+	const [updatingDistrict, setUpdatingDistrict] = useState(false);
+
+	const [deleteModal, setDeleteModal] = useState({
+		open: false,
+		district: null,
+	});
+
+	const [deletingDistrict, setDeletingDistrict] = useState(false);
 
 	/*
 	|--------------------------------------------------------------------------
@@ -261,23 +277,143 @@ function DistrictLocation() {
 			district
 		);
 
+		setEditingDistrictId(district.id);
+		setEditForm({
+			name: district.name || "",
+			address: district.address || "",
+			latitude: district.latitude || "",
+			longitude: district.longitude || "",
+			storage_location:
+				district.storage_location || "",
+		});
+
 	};
 
+	const handleCancelEdit = () => {
+		setEditingDistrictId(null);
+
+		setEditForm({
+			name: "",
+			address: "",
+			latitude: "",
+			longitude: "",
+			storage_location: "",
+		});
+	};
+
+	const handleEditChange = (event) => {
+		const { name, value } = event.target;
+		setEditForm((previous) => ({
+			...previous,
+			[name]: value
+		}));
+	};
+
+	const handleUpdateDistrict = async (districtId) => {
+		try {
+			setUpdatingDistrict(true);
+			console.log('district id :', districtId);
+			const payload = {
+				name: editForm.name.trim(),
+				address: editForm.address.trim(),
+				latitude: editForm.latitude,
+				longitude: editForm.longitude,
+				storage_location:
+					editForm.storage_location.trim(),
+			};
+			console.log("Update district payload:", payload);
+			const response = await updateDistrict(districtId, payload);
+			console.log("Update district response:", response);
+			if (response?.success) {
+				alert("District updated successfully.");
+
+				await loadDistricts();
+
+				handleCancelEdit();
+			} else {
+				alert(
+					response?.message ||
+					"Failed to update district."
+				);
+			}
+		} catch (error) {
+			console.error("Update district error:", error);
+			alert("Unable to update district.");
+		} finally {
+			setUpdatingDistrict(false);
+		}
+	};
+
+	// const handleDeleteDistrict = (district) => {
+
+	// 	const confirmed = window.confirm(
+	// 		`Are you sure you want to delete "${district.name}"?`
+	// 	);
+
+	// 	if (!confirmed) {
+	// 		return;
+	// 	}
+
+	// 	console.log(
+	// 		"Delete district:",
+	// 		district
+	// 	);
+
+	// };
+
 	const handleDeleteDistrict = (district) => {
+		setDeleteModal({
+			open: true,
+			district,
+		});
+	};
 
-		const confirmed = window.confirm(
-			`Are you sure you want to delete "${district.name}"?`
-		);
+	const handleConfirmDelete = async () => {
+		const district = deleteModal.district;
 
-		if (!confirmed) {
+		if (!district) {
 			return;
 		}
 
-		console.log(
-			"Delete district:",
-			district
-		);
+		try {
+			setDeletingDistrict(true);
 
+			const response = await deleteDistrict(district.id);
+
+			console.log("Delete district response:", response);
+
+			if (response?.success) {
+				setDeleteModal({
+					open: false,
+					district: null,
+				});
+
+				// If the deleted district was selected on the map,
+				// clear the selection as well.
+				if (selectedDistrict?.id === district.id) {
+					setSelectedDistrict(null);
+					setPosition(null);
+
+					setForm({
+						name: "",
+						address: "",
+						latitude: "",
+						longitude: "",
+						storage_location: "",
+					});
+				}
+				await loadDistricts();
+				alert("District deleted successfully");
+			} else {
+				alert(response?.message || "Failed to delete district.");
+			}
+		} catch (error) {
+			console.error("Delete district error:", error);
+
+			alert(error?.message || "Something went wrong while deleting district.");
+		} finally {
+			setDeletingDistrict(false);
+		}
 	};
 
 	return (
@@ -504,12 +640,6 @@ function DistrictLocation() {
 							className="h-full w-full"
 						>
 
-							{/* <TileLayer
-								attribution='&copy; OpenStreetMap contributors'
-								url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-								maxZoom={19}
-							/> */}
-
 							<LocationMarker
 								position={position}
 								setPosition={handleMapPosition}
@@ -651,102 +781,255 @@ function DistrictLocation() {
 
 								{districts.length > 0 ? (
 
-									districts.map((district, index) => (
+									districts.map((district, index) => {
 
-										<tr
-											key={district.id}
-											className="transition hover:bg-gray-50"
-										>
+										const isEditing =
+											editingDistrictId ===
+											district.id;
 
-											{/* S.No. */}
+										return (
+											<tr
+												key={district.id}
+												className="transition hover:bg-gray-50"
+											>
 
-											<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
-												{index + 1}
-											</td>
-
-
-											{/* District */}
-
-											<td className="whitespace-nowrap px-5 py-4 text-sm font-medium text-gray-800">
-												{district.name}
-											</td>
+												{/* S.No. */}
+												<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
+													{index + 1}
+												</td>
 
 
-											{/* Address */}
+												{/* District */}
+												<td className="whitespace-nowrap px-5 py-4">
 
-											<td className="px-5 py-4 text-sm text-gray-600">
-												{district.address || "-"}
-											</td>
+													{isEditing ? (
+														<input
+															type="text"
+															name="name"
+															value={editForm.name}
+															onChange={
+																handleEditChange
+															}
+															readOnly
+															className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 outline-none"
+														/>
+													) : (
+														<span className="text-sm font-medium text-gray-800">
+															{district.name}
+														</span>
+													)}
 
-
-											{/* Latitude */}
-
-											<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
-												{district.latitude || "-"}
-											</td>
-
-
-											{/* Longitude */}
-
-											<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
-												{district.longitude || "-"}
-											</td>
-
-
-											{/* Storage Location */}
-
-											<td className="px-5 py-4 text-sm text-gray-600">
-												{district.storage_location || "-"}
-											</td>
+												</td>
 
 
-											{/* Actions */}
+												{/* Address */}
+												<td className="px-5 py-4">
 
-											<td className="whitespace-nowrap px-5 py-4">
-												<div className="flex items-center justify-center gap-2">
+													{isEditing ? (
+														<input
+															type="text"
+															name="address"
+															value={
+																editForm.address
+															}
+															onChange={
+																handleEditChange
+															}
+															className="w-full min-w-[220px] rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+														/>
+													) : (
+														<span className="text-sm text-gray-600">
+															{district.address ||
+																"-"}
+														</span>
+													)}
 
-													{/* Edit */}
-													<button
-														type="button"
-														onClick={() =>
-															handleEditDistrict(district)
-														}
-														title="Edit District"
-														className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 transition hover:bg-blue-100"
-													>
-														<Pencil size={17} strokeWidth={2} />
-													</button>
+												</td>
 
-													{/* Delete */}
-													<button
-														type="button"
-														onClick={() =>
-															handleDeleteDistrict(district)
-														}
-														title="Delete District"
-														className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
-													>
-														<Trash2 size={17} strokeWidth={2} />
-													</button>
 
-												</div>
-											</td>
+												{/* Latitude */}
+												<td className="whitespace-nowrap px-5 py-4">
 
-										</tr>
+													{isEditing ? (
+														<input
+															type="text"
+															name="latitude"
+															value={
+																editForm.latitude
+															}
+															onChange={
+																handleEditChange
+															}
+															readOnly
+															className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 outline-none"
+														/>
+													) : (
+														<span className="text-sm text-gray-600">
+															{district.latitude ||
+																"-"}
+														</span>
+													)}
 
-									))
+												</td>
+
+
+												{/* Longitude */}
+												<td className="whitespace-nowrap px-5 py-4">
+
+													{isEditing ? (
+														<input
+															type="text"
+															name="longitude"
+															value={
+																editForm.longitude
+															}
+															onChange={
+																handleEditChange
+															}
+															readOnly
+															className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 outline-none"
+														/>
+													) : (
+														<span className="text-sm text-gray-600">
+															{district.longitude ||
+																"-"}
+														</span>
+													)}
+
+												</td>
+
+
+												{/* Storage Location */}
+												<td className="px-5 py-4">
+
+													{isEditing ? (
+														<input
+															type="text"
+															name="storage_location"
+															value={
+																editForm.storage_location
+															}
+															onChange={
+																handleEditChange
+															}
+															className="w-full min-w-[180px] rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+														/>
+													) : (
+														<span className="text-sm text-gray-600">
+															{district.storage_location ||
+																"-"}
+														</span>
+													)}
+
+												</td>
+
+
+												{/* Action */}
+												<td className="whitespace-nowrap px-5 py-4">
+
+													<div className="flex items-center justify-center gap-2">
+
+														{isEditing ? (
+
+															<>
+																{/* Save */}
+																<button
+																	type="button"
+																	disabled={
+																		updatingDistrict
+																	}
+																	onClick={() =>
+																		handleUpdateDistrict(
+																			district.id
+																		)
+																	}
+																	title="Save Changes"
+																	className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-600 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
+																>
+																	<Check
+																		size={18}
+																		strokeWidth={2.5}
+																	/>
+																</button>
+
+
+																{/* Cancel */}
+																<button
+																	type="button"
+																	disabled={
+																		updatingDistrict
+																	}
+																	onClick={
+																		handleCancelEdit
+																	}
+																	title="Cancel"
+																	className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+																>
+																	<X
+																		size={18}
+																		strokeWidth={2.5}
+																	/>
+																</button>
+															</>
+
+														) : (
+
+															<>
+																{/* Edit */}
+																<button
+																	type="button"
+																	onClick={() =>
+																		handleEditDistrict(
+																			district
+																		)
+																	}
+																	title="Edit District"
+																	className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 transition hover:bg-blue-100"
+																>
+																	<Pencil
+																		size={17}
+																		strokeWidth={2}
+																	/>
+																</button>
+
+
+																{/* Delete */}
+																<button
+																	type="button"
+																	onClick={() =>
+																		handleDeleteDistrict(
+																			district
+																		)
+																	}
+																	title="Delete District"
+																	className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+																>
+																	<Trash2
+																		size={17}
+																		strokeWidth={2}
+																	/>
+																</button>
+															</>
+
+														)}
+
+													</div>
+
+												</td>
+
+											</tr>
+										);
+									})
 
 								) : (
 
 									<tr>
-
 										<td
 											colSpan="7"
 											className="px-5 py-8 text-center text-sm text-gray-500"
 										>
 											No districts found.
 										</td>
-
 									</tr>
 
 								)}
@@ -759,6 +1042,76 @@ function DistrictLocation() {
 				)}
 
 			</div>
+			{/* =====================================================
+    Delete Confirmation Modal
+====================================================== */}
+
+			{deleteModal.open && (
+				<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">
+					<div className="w-full overflow-hidden max-w-md rounded-2xl bg-white shadow-2xl">
+						{/* Modal Content */}
+
+						<div className="p-6">
+							{/* Delete Icon */}
+
+							<div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
+								<Trash2 size={28} strokeWidth={2} className="text-red-600" />
+							</div>
+
+							{/* Title */}
+
+							<h3 className="mt-5 text-center text-lg font-semibold text-gray-900">
+								Delete District?
+							</h3>
+
+							{/* Description */}
+
+							<p className="mt-2 text-center text-sm leading-6 text-gray-500">
+								Are you sure you want to delete{" "}
+								<span className="font-semibold text-gray-800">
+									"{deleteModal.district?.name}"
+								</span>
+								?
+								<br />
+								This action cannot be undone.
+							</p>
+						</div>
+
+						{/* Modal Actions */}
+
+						<div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+							<button
+								type="button"
+								onClick={() => {
+									if (deletingDistrict) {
+										return;
+									}
+
+									setDeleteModal({
+										open: false,
+										district: null,
+									});
+								}}
+								disabled={deletingDistrict}
+								className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+							>
+								Cancel
+							</button>
+
+							<button
+								type="button"
+								onClick={handleConfirmDelete}
+								disabled={deletingDistrict}
+								className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								<Trash2 size={17} strokeWidth={2} />
+
+								{deletingDistrict ? "Deleting..." : "Delete District"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

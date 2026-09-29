@@ -12,10 +12,13 @@ import DistrictLayer from "../../components/map/DistrictLayer";
 
 import {
 	createSubdivision,
+	deleteSubdivision,
 	listSubdivisions,
+	updateSubdivision,
 } from "../../services";
 
 import { WEST_BENGAL_BOUNDS } from "../../constants/mapBounds";
+import { Check, Pencil, Trash2, X } from "lucide-react";
 
 
 function SubdivisionLocation() {
@@ -69,6 +72,22 @@ function SubdivisionLocation() {
 	const [saving, setSaving] =
 		useState(false);
 
+	const [editingSubdivisionId, setEditingSubdivisionId] = useState(null);
+	const [editForm, setEditForm] = useState({
+		district_id: "",
+		district: "",
+		name: "",
+		address: "",
+		latitude: "",
+		longitude: "",
+	});
+	const [updatingSubdivision, setUpdatingSubdivision] = useState(false);
+
+	const [deleteModal, setDeleteModal] = useState({
+		open: false,
+		subdivision: null
+	});
+	const [deletingSubdivision, setDeletingSubdivision] = useState(false);
 
 	/*
 	|--------------------------------------------------------------------------
@@ -234,7 +253,7 @@ function SubdivisionLocation() {
 			"Selected subdivision:",
 			subdivision
 		);
-
+		console.log("Selected district:", selectedDistrict);
 
 		/*
 		|--------------------------------------------------------------------------
@@ -262,7 +281,7 @@ function SubdivisionLocation() {
 			...previous,
 
 			district_id:
-				subdivision.districtId ||
+				// subdivision.districtId ||
 				selectedDistrict?.id ||
 				"",
 
@@ -286,7 +305,7 @@ function SubdivisionLocation() {
 					: "",
 
 		}));
-
+		console.log(selectedDistrict?.id);
 
 		/*
 		|--------------------------------------------------------------------------
@@ -519,6 +538,241 @@ function SubdivisionLocation() {
 
 		setSelectedSubdivision(null);
 
+	};
+
+	const handleEditSubdivision = (subdivision) => {
+
+		console.log(
+			"Edit subdivision:",
+			subdivision
+		);
+
+		setEditingSubdivisionId(
+			subdivision.id
+		);
+
+		setEditForm({
+			district_id:
+				subdivision.district_id ||
+				subdivision.districtId ||
+				"",
+
+			district:
+				subdivision.district ||
+				subdivision.district_name ||
+				"",
+
+			name:
+				subdivision.name ||
+				"",
+
+			address:
+				subdivision.address ||
+				"",
+
+			latitude:
+				subdivision.latitude ??
+				"",
+
+			longitude:
+				subdivision.longitude ??
+				"",
+		});
+	};
+
+	const handleCancelEdit = () => {
+
+		setEditingSubdivisionId(null);
+
+		setEditForm({
+			district_id: "",
+			district: "",
+			name: "",
+			address: "",
+			latitude: "",
+			longitude: "",
+		});
+	};
+
+	const handleEditChange = (event) => {
+
+		const {
+			name,
+			value,
+		} = event.target;
+
+		setEditForm((previous) => ({
+			...previous,
+			[name]: value,
+		}));
+	};
+
+	const handleUpdateSubdivision = async (
+		subdivisionId
+	) => {
+
+		try {
+
+			setUpdatingSubdivision(true);
+
+			const payload = {
+				district_id:
+					editForm.district_id,
+
+				district:
+					editForm.district.trim(),
+
+				name:
+					editForm.name.trim(),
+
+				address:
+					editForm.address.trim(),
+
+				latitude:
+					editForm.latitude,
+
+				longitude:
+					editForm.longitude,
+			};
+
+			console.log(
+				"Update subdivision ID:",
+				subdivisionId
+			);
+
+			console.log(
+				"Update subdivision payload:",
+				payload
+			);
+
+			const response =
+				await updateSubdivision(
+					subdivisionId,
+					payload
+				);
+
+			console.log(
+				"Update subdivision response:",
+				response
+			);
+
+			if (response?.success) {
+
+				alert(
+					"Subdivision updated successfully."
+				);
+
+				await loadSubdivisions();
+
+				handleCancelEdit();
+
+			} else {
+
+				alert(
+					response?.message ||
+					"Failed to update subdivision."
+				);
+
+			}
+
+		} catch (error) {
+
+			console.error(
+				"Update subdivision error:",
+				error
+			);
+
+			alert(
+				error?.message ||
+				"Unable to update subdivision."
+			);
+
+		} finally {
+
+			setUpdatingSubdivision(false);
+
+		}
+	};
+
+	const handleDeleteSubdivision = (
+		subdivision
+	) => {
+
+		setDeleteModal({
+			open: true,
+			subdivision,
+		});
+	};
+
+	const handleConfirmDelete = async () => {
+
+		const subdivision =
+			deleteModal.subdivision;
+
+		if (!subdivision) {
+			return;
+		}
+
+		try {
+
+			setDeletingSubdivision(true);
+
+			const response =
+				await deleteSubdivision(
+					subdivision.id
+				);
+
+			console.log(
+				"Delete subdivision response:",
+				response
+			);
+
+			if (response?.success) {
+
+				setDeleteModal({
+					open: false,
+					subdivision: null,
+				});
+
+				if (
+					editingSubdivisionId ===
+					subdivision.id
+				) {
+					handleCancelEdit();
+				}
+
+				await loadSubdivisions();
+
+				alert(
+					"Subdivision deleted successfully."
+				);
+
+			} else {
+
+				alert(
+					response?.message ||
+					"Failed to delete subdivision."
+				);
+
+			}
+
+		} catch (error) {
+
+			console.error(
+				"Delete subdivision error:",
+				error
+			);
+
+			alert(
+				error?.message ||
+				"Something went wrong while deleting subdivision."
+			);
+
+		} finally {
+
+			setDeletingSubdivision(false);
+
+		}
 	};
 
 
@@ -786,6 +1040,11 @@ function SubdivisionLocation() {
 									selectedDistrict={
 										selectedDistrict
 									}
+
+									databaseSubdivisions={
+										subdivisions
+									}
+
 									onSubdivisionSelect={
 										handleSubdivisionSelect
 									}
@@ -989,6 +1248,10 @@ function SubdivisionLocation() {
 											Longitude
 										</th>
 
+										<th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+											Action
+										</th>
+
 									</tr>
 
 								</thead>
@@ -1001,78 +1264,297 @@ function SubdivisionLocation() {
 									{subdivisions.length > 0 ? (
 
 										subdivisions.map(
-											(subdivision, index) => (
+											(subdivision, index) => {
 
-												<tr
-													key={
-														subdivision.id
-													}
-													className="transition hover:bg-gray-50"
-												>
+												const isEditing =
+													editingSubdivisionId ===
+													subdivision.id;
 
+												return (
 
-													{/* S.No. */}
+													<tr
+														key={subdivision.id}
+														className="transition hover:bg-gray-50"
+													>
 
-													<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
+														{/* S.No. */}
 
-														{index + 1}
+														<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
 
-													</td>
+															{index + 1}
 
-
-													{/* District */}
-
-													<td className="whitespace-nowrap px-5 py-4 text-sm font-medium text-gray-800">
-
-														{subdivision.district ||
-															subdivision.district_name ||
-															"-"}
-
-													</td>
+														</td>
 
 
-													{/* Subdivision */}
+														{/* District */}
 
-													<td className="whitespace-nowrap px-5 py-4 text-sm font-medium text-gray-800">
+														<td className="whitespace-nowrap px-5 py-4">
 
-														{subdivision.name ||
-															"-"}
+															{isEditing ? (
 
-													</td>
+																<input
+																	type="text"
+																	name="district"
+																	value={
+																		editForm.district
+																	}
+																	readOnly
+																	className="w-full min-w-[150px] rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 outline-none"
+																/>
+
+															) : (
+
+																<span className="text-sm font-medium text-gray-800">
+
+																	{subdivision.district ||
+																		subdivision.district_name ||
+																		"-"}
+
+																</span>
+
+															)}
+
+														</td>
 
 
-													{/* Address */}
+														{/* Subdivision */}
 
-													<td className="px-5 py-4 text-sm text-gray-600">
+														<td className="whitespace-nowrap px-5 py-4">
 
-														{subdivision.address ||
-															"-"}
+															{isEditing ? (
 
-													</td>
+																<input
+																	type="text"
+																	name="name"
+																	value={
+																		editForm.name
+																	}
+																	readOnly
+																	className="w-full min-w-[180px] rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 outline-none"
+																/>
+
+															) : (
+
+																<span className="text-sm font-medium text-gray-800">
+
+																	{subdivision.name ||
+																		"-"}
+
+																</span>
+
+															)}
+
+														</td>
 
 
-													{/* Latitude */}
+														{/* Address */}
 
-													<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
+														<td className="px-5 py-4">
 
-														{subdivision.latitude ||
-															"-"}
+															{isEditing ? (
 
-													</td>
+																<input
+																	type="text"
+																	name="address"
+																	value={
+																		editForm.address
+																	}
+																	onChange={
+																		handleEditChange
+																	}
+																	className="w-full min-w-[250px] rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+																/>
+
+															) : (
+
+																<span className="text-sm text-gray-600">
+
+																	{subdivision.address ||
+																		"-"}
+
+																</span>
+
+															)}
+
+														</td>
 
 
-													{/* Longitude */}
+														{/* Latitude */}
 
-													<td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
+														<td className="whitespace-nowrap px-5 py-4">
 
-														{subdivision.longitude ||
-															"-"}
+															{isEditing ? (
 
-													</td>
+																<input
+																	type="text"
+																	name="latitude"
+																	value={
+																		editForm.latitude
+																	}
+																	readOnly
+																	className="w-full min-w-[120px] rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 outline-none"
+																/>
 
-												</tr>
+															) : (
 
-											)
+																<span className="text-sm text-gray-600">
+
+																	{subdivision.latitude ||
+																		"-"}
+
+																</span>
+
+															)}
+
+														</td>
+
+
+														{/* Longitude */}
+
+														<td className="whitespace-nowrap px-5 py-4">
+
+															{isEditing ? (
+
+																<input
+																	type="text"
+																	name="longitude"
+																	value={
+																		editForm.longitude
+																	}
+																	readOnly
+																	className="w-full min-w-[120px] rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 outline-none"
+																/>
+
+															) : (
+
+																<span className="text-sm text-gray-600">
+
+																	{subdivision.longitude ||
+																		"-"}
+
+																</span>
+
+															)}
+
+														</td>
+
+
+														{/* Action */}
+
+														<td className="whitespace-nowrap px-5 py-4">
+
+															<div className="flex items-center justify-center gap-2">
+
+																{isEditing ? (
+
+																	<>
+
+																		{/* Save */}
+
+																		<button
+																			type="button"
+																			disabled={
+																				updatingSubdivision
+																			}
+																			onClick={() =>
+																				handleUpdateSubdivision(
+																					subdivision.id
+																				)
+																			}
+																			title="Save Changes"
+																			className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-600 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
+																		>
+
+																			<Check
+																				size={18}
+																				strokeWidth={2.5}
+																			/>
+
+																		</button>
+
+
+																		{/* Cancel */}
+
+																		<button
+																			type="button"
+																			disabled={
+																				updatingSubdivision
+																			}
+																			onClick={
+																				handleCancelEdit
+																			}
+																			title="Cancel"
+																			className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+																		>
+
+																			<X
+																				size={18}
+																				strokeWidth={2.5}
+																			/>
+
+																		</button>
+
+																	</>
+
+																) : (
+
+																	<>
+
+																		{/* Edit */}
+
+																		<button
+																			type="button"
+																			onClick={() =>
+																				handleEditSubdivision(
+																					subdivision
+																				)
+																			}
+																			title="Edit Subdivision"
+																			className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 transition hover:bg-blue-100"
+																		>
+
+																			<Pencil
+																				size={17}
+																				strokeWidth={2}
+																			/>
+
+																		</button>
+
+
+																		{/* Delete */}
+
+																		<button
+																			type="button"
+																			onClick={() =>
+																				handleDeleteSubdivision(
+																					subdivision
+																				)
+																			}
+																			title="Delete Subdivision"
+																			className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+																		>
+
+																			<Trash2
+																				size={17}
+																				strokeWidth={2}
+																			/>
+
+																		</button>
+
+																	</>
+
+																)}
+
+															</div>
+
+														</td>
+
+													</tr>
+
+												);
+
+											}
+
 										)
 
 									) : (
@@ -1080,7 +1562,7 @@ function SubdivisionLocation() {
 										<tr>
 
 											<td
-												colSpan="6"
+												colSpan="7"
 												className="px-5 py-8 text-center text-sm text-gray-500"
 											>
 
@@ -1101,6 +1583,122 @@ function SubdivisionLocation() {
 					)}
 
 			</div>
+
+			{deleteModal.open && (
+
+				<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">
+
+					<div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+						{/* Modal Content */}
+
+						<div className="p-6">
+
+							{/* Delete Icon */}
+
+							<div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
+
+								<Trash2
+									size={28}
+									strokeWidth={2}
+									className="text-red-600"
+								/>
+
+							</div>
+
+
+							{/* Title */}
+
+							<h3 className="mt-5 text-center text-lg font-semibold text-gray-900">
+
+								Delete Subdivision?
+
+							</h3>
+
+
+							{/* Description */}
+
+							<p className="mt-2 text-center text-sm leading-6 text-gray-500">
+
+								Are you sure you want to delete{" "}
+
+								<span className="font-semibold text-gray-800">
+
+									"{deleteModal.subdivision?.name}"
+
+								</span>
+
+								?
+
+								<br />
+
+								This action cannot be undone.
+
+							</p>
+
+						</div>
+
+
+						{/* Modal Actions */}
+
+						<div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+
+							<button
+								type="button"
+								disabled={
+									deletingSubdivision
+								}
+								onClick={() => {
+
+									if (
+										deletingSubdivision
+									) {
+										return;
+									}
+
+									setDeleteModal({
+										open: false,
+										subdivision: null,
+									});
+
+								}}
+								className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+							>
+
+								Cancel
+
+							</button>
+
+
+							<button
+								type="button"
+								disabled={
+									deletingSubdivision
+								}
+								onClick={
+									handleConfirmDelete
+								}
+								className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+							>
+
+								<Trash2
+									size={17}
+									strokeWidth={2}
+								/>
+
+								{deletingSubdivision
+									? "Deleting..."
+									: "Delete Subdivision"}
+
+							</button>
+
+						</div>
+
+					</div>
+
+				</div>
+
+			)}
 
 		</div>
 

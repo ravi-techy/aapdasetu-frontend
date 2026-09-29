@@ -115,7 +115,7 @@ export const patch = (endpoint, body) =>
 export const put = (endpoint, body) =>
   apiFetch(endpoint, { method: "PUT", body: JSON.stringify(body) });
 
-export const del = (endpoint, body) =>
+export const del = (endpoint) =>
   apiFetch(endpoint, { method: "DELETE" });
 
 export default apiFetch;
