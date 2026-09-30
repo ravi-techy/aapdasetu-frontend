@@ -13,6 +13,7 @@ import DistrictLayer from "../../components/map/DistrictLayer";
 import {
 	createSubdivision,
 	deleteSubdivision,
+	listDistricts,
 	listSubdivisions,
 	updateSubdivision,
 } from "../../services";
@@ -60,6 +61,7 @@ function SubdivisionLocation() {
 	|--------------------------------------------------------------------------
 	*/
 
+	const [districts, setDistricts] = useState([]);
 	const [subdivisions, setSubdivisions] =
 		useState([]);
 
@@ -109,9 +111,23 @@ function SubdivisionLocation() {
 
 	/*
 	|--------------------------------------------------------------------------
-	| Load Subdivisions
+	| Load Districts and Subdivisions
 	|--------------------------------------------------------------------------
 	*/
+	const loadDistricts = async () => {
+		try {
+			const response = await listDistricts();
+
+			if (response?.success) {
+				setDistricts(response.data || []);
+			}
+		} catch (error) {
+			console.error(
+				"Load districts error:",
+				error
+			);
+		}
+	};
 
 	const loadSubdivisions = async () => {
 
@@ -172,9 +188,8 @@ function SubdivisionLocation() {
 	*/
 
 	useEffect(() => {
-
+		loadDistricts();
 		loadSubdivisions();
-
 	}, []);
 
 
@@ -1021,12 +1036,10 @@ function SubdivisionLocation() {
                             ================================================== */}
 
 							<DistrictLayer
-								selectedDistrict={
-									selectedDistrict
-								}
-								onDistrictSelect={
-									handleDistrictSelect
-								}
+								selectedDistrict={selectedDistrict}
+								databaseDistricts={districts}
+								requireDatabaseDistrict={true}
+								onDistrictSelect={handleDistrictSelect}
 							/>
 
 
@@ -1037,17 +1050,12 @@ function SubdivisionLocation() {
 							{selectedDistrict && (
 
 								<SubdivisionLayer
-									selectedDistrict={
-										selectedDistrict
-									}
-
-									databaseSubdivisions={
-										subdivisions
-									}
-
-									onSubdivisionSelect={
-										handleSubdivisionSelect
-									}
+									selectedDistrict={selectedDistrict}
+									databaseDistricts={districts}
+									databaseSubdivisions={subdivisions}
+									requireDatabaseDistrict={true}
+									requireDatabaseSubdivision={false}
+									onSubdivisionSelect={handleSubdivisionSelect}
 								/>
 
 							)}
