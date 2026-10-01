@@ -300,7 +300,7 @@ export default function SubdivisionLayer({
                 ) {
 
                     alert(
-                        `Subdivision "${subdivisionName}" is not available in the database yet.`
+                        `Subdivision "${subdivisionName}" is not available in the database yet. Please choose only a created subdivision.`
                     );
 
                     return;

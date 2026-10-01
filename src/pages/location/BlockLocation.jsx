@@ -21,7 +21,7 @@ import {
 	X,
 } from "lucide-react";
 import { createBlock, deleteBlock, listBlocks, updateBlock } from "../../services/blockService";
-import { listSubdivisions } from "../../services";
+import { listDistricts, listSubdivisions } from "../../services";
 
 
 function BlocksLocation() {
@@ -114,6 +114,7 @@ function BlocksLocation() {
 		useState(null);
 
 	const [subdivisions, setSubdivisions] = useState([]);
+	const [districts, setDistricts] = useState([]);
 
 	/*
 	|--------------------------------------------------------------------------
@@ -197,10 +198,21 @@ function BlocksLocation() {
 
 	};
 
-	useEffect(() => {
+	const loadDistricts = async () => {
+		try {
+			const response = await listDistricts();
 
+			if (response?.success) {
+				setDistricts(response.data || []);
+			}
+		} catch (error) {
+			console.error("Load districts error:", error);
+		}
+	};
+
+	useEffect(() => {
+		loadDistricts();
 		loadSubdivisions();
-		loadBlocks();
 
 	}, []);
 
@@ -1214,6 +1226,8 @@ function BlocksLocation() {
 								selectedDistrict={
 									selectedDistrict
 								}
+								databaseDistricts={districts}
+								requireDatabaseDistrict={true}
 								onDistrictSelect={
 									handleDistrictSelect
 								}
@@ -1225,6 +1239,10 @@ function BlocksLocation() {
 									selectedDistrict={
 										selectedDistrict
 									}
+									databaseDistricts={districts}
+									databaseSubdivisions={subdivisions}
+									requireDatabaseDistrict={true}
+									requireDatabaseSubdivision={true}
 									onSubdivisionSelect={
 										handleSubdivisionSelect
 									}

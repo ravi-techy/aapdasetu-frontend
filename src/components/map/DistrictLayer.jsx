@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { GeoJSON } from "react-leaflet";
 
 const DISTRICT_COLORS = [
@@ -54,6 +54,11 @@ export default function DistrictLayer({
   requireDatabaseDistrict = false,
 }) {
   const [geoData, setGeoData] = useState(null);
+  const databaseDistrictsRef = useRef(databaseDistricts);
+
+  useLayoutEffect(() => {
+    databaseDistrictsRef.current = databaseDistricts;
+  }, [databaseDistricts]);
 
   useEffect(() => {
     const loadDistricts = async () => {
@@ -169,7 +174,7 @@ export default function DistrictLayer({
         const normalizedGeoName =
           normalizeDistrictName(districtName);
 
-        const databaseDistrict = databaseDistricts.find(
+        const databaseDistrict = databaseDistrictsRef.current.find(
           (district) =>
             normalizeDistrictName(district.name) ===
             normalizedGeoName
@@ -177,7 +182,7 @@ export default function DistrictLayer({
 
         if (!databaseDistrict) {
           alert(
-            `District "${districtName}" was not found in the database. Please create the district first.`
+            `District "${districtName}" was not found in the database. Please choose only a created district.`
           );
 
           return;
