@@ -4,605 +4,710 @@ import { GeoJSON } from "react-leaflet";
 import { MAP_STYLES } from "../../constants/mapStyles";
 
 
-function BlocksLayer({
-	selectedDistrict,
-	selectedSubdivision,
-	databaseBlocks = [],
-	onBlockSelect,
+export default function BlocksLayer({
+    selectedDistrict,
+    selectedSubdivision,
+    databaseBlocks = [],
+    onBlockSelect,
 }) {
 
-	const [blockData, setBlockData] =
-		useState(null);
+    const [blockData, setBlockData] =
+        useState(null);
 
-	const [error, setError] =
-		useState("");
+    const [error, setError] =
+        useState("");
 
 
-	/*
-	|--------------------------------------------------------------------------
-	| Load Block GeoJSON
-	|--------------------------------------------------------------------------
-	*/
+    /*
+     * -------------------------------------------------------
+     * Load Block GeoJSON
+     * -------------------------------------------------------
+     */
 
-	useEffect(() => {
+    useEffect(() => {
 
-		fetch("/gis/blocks.geojson")
+        const loadBlocks = async () => {
 
-			.then((response) => {
+            try {
 
-				if (!response.ok) {
+                setError("");
 
-					throw new Error(
-						`HTTP error: ${response.status}`
-					);
+                const response =
+                    await fetch(
+                        "/gis/blocks.geojson"
+                    );
 
-				}
 
-				return response.json();
+                if (!response.ok) {
 
-			})
+                    throw new Error(
+                        `HTTP error: ${response.status}`
+                    );
 
-			.then((data) => {
+                }
 
-				console.log(
-					"Blocks GeoJSON:",
-					data
-				);
 
+                const data =
+                    await response.json();
 
-				if (
-					!data ||
-					!Array.isArray(
-						data.features
-					)
-				) {
 
-					throw new Error(
-						"Invalid blocks GeoJSON format."
-					);
+                if (
+                    !data ||
+                    !Array.isArray(data.features)
+                ) {
 
-				}
+                    throw new Error(
+                        "Invalid blocks GeoJSON format."
+                    );
 
+                }
 
-				setBlockData(data);
 
-			})
+                console.log(
+                    "Blocks GeoJSON loaded:",
+                    data
+                );
 
-			.catch((error) => {
 
-				console.error(
-					"Blocks GeoJSON error:",
-					error
-				);
+                setBlockData(data);
 
-				setError(
-					"Unable to load block map data."
-				);
+            } catch (error) {
 
-			});
+                console.error(
+                    "Blocks GeoJSON error:",
+                    error
+                );
 
-	}, []);
 
+                setError(
+                    "Unable to load block map data."
+                );
 
-	/*
-	|--------------------------------------------------------------------------
-	| Filter Blocks
-	|--------------------------------------------------------------------------
-	*/
+            }
 
-	const filteredBlockData =
-		selectedDistrict &&
-			selectedSubdivision &&
-			blockData
-			? {
-				...blockData,
+        };
 
-				features:
-					blockData.features.filter(
-						(feature) => {
 
-							const properties =
-								feature?.properties ||
-								{};
+        loadBlocks();
 
+    }, []);
 
-							/*
-							 * GeoJSON district ID
-							 */
 
-							const districtLgd =
-								properties.dist_lgd;
+    /*
+     * -------------------------------------------------------
+     * District selection required
+     * -------------------------------------------------------
+     */
 
+    if (!selectedDistrict) {
+        return null;
+    }
 
-							/*
-							 * GeoJSON subdivision ID
-							 */
 
-							const subdivisionLgd =
-								properties.subdivision_id;
+    /*
+     * -------------------------------------------------------
+     * Subdivision selection required
+     * -------------------------------------------------------
+     */
 
+    if (!selectedSubdivision) {
+        return null;
+    }
+
+
+    /*
+     * -------------------------------------------------------
+     * Database district required
+     * -------------------------------------------------------
+     *
+     * A district selected only from GeoJSON is NOT enough.
+     *
+     * Example:
+     *
+     * {
+     *     id: null,
+     *     dist_lgd: 309,
+     *     name: "Darjeeling"
+     * }
+     *
+     * Therefore blocks must not be displayed.
+     */
+
+    const hasDatabaseDistrict =
+        selectedDistrict.id !== null &&
+        selectedDistrict.id !== undefined;
+
+
+    if (!hasDatabaseDistrict) {
+        return null;
+    }
+
+
+    /*
+     * -------------------------------------------------------
+     * Database subdivision required
+     * -------------------------------------------------------
+     *
+     * A subdivision selected from GeoJSON is also NOT enough.
+     *
+     * It must already exist in the database.
+     */
+
+    const hasDatabaseSubdivision =
+        selectedSubdivision.id !== null &&
+        selectedSubdivision.id !== undefined;
+
+
+    if (!hasDatabaseSubdivision) {
+        return null;
+    }
+
+
+    /*
+     * -------------------------------------------------------
+     * Loading
+     * -------------------------------------------------------
+     */
+
+    if (!blockData) {
+        return null;
+    }
+
+
+    /*
+     * -------------------------------------------------------
+     * Filter blocks
+     * -------------------------------------------------------
+     *
+     * IMPORTANT:
+     *
+     * GeoJSON uses:
+     *
+     *     dist_lgd
+     *     subdivision_id
+     *
+     * Database uses:
+     *
+     *     district.id
+     *     subdivision.id
+     *
+     * NEVER mix these two ID systems.
+     */
+
+    const filteredBlockData = {
+
+        ...blockData,
+
+        features:
+            blockData.features.filter(
+                (feature) => {
+
+                    const properties =
+                        feature?.properties || {};
+
+
+                    /*
+                     * -------------------------------------------------
+                     * GEOJSON DISTRICT ID
+                     * -------------------------------------------------
+                     */
+
+                    const districtLgd =
+                        properties.dist_lgd;
+
+
+                    /*
+                     * -------------------------------------------------
+                     * GEOJSON SUBDIVISION ID
+                     * -------------------------------------------------
+                     */
+
+                    const subdivisionLgd =
+                        properties.subdivision_id;
+
+
+                    /*
+                     * -------------------------------------------------
+                     * District match
+                     * -------------------------------------------------
+                     */
+
+                    const districtMatches =
+                        Number(districtLgd) ===
+                        Number(
+                            selectedDistrict.dist_lgd
+                        );
+
+
+                    /*
+                     * -------------------------------------------------
+                     * Subdivision match
+                     * -------------------------------------------------
+                     */
+
+                    const subdivisionMatches =
+                        String(
+                            subdivisionLgd ?? ""
+                        ).trim() ===
+                        String(
+                            selectedSubdivision
+                                .subdivision_lgd ?? ""
+                        ).trim();
+
+
+                    return (
+                        districtMatches &&
+                        subdivisionMatches
+                    );
+                }
+            ),
+    };
+
+
+    /*
+     * -------------------------------------------------------
+     * Block Feature
+     * -------------------------------------------------------
+     */
+
+    const onEachBlock = (
+        feature,
+        layer
+    ) => {
+
+        const properties =
+            feature?.properties || {};
+
+
+        /*
+         * -----------------------------------------------------
+         * GEOJSON BLOCK ID
+         * -----------------------------------------------------
+         */
+
+        const blockLgd =
+            properties.block_lgd;
+
+
+        /*
+         * -----------------------------------------------------
+         * GEOJSON DISTRICT ID
+         * -----------------------------------------------------
+         */
+
+        const districtLgd =
+            properties.dist_lgd;
+
+
+        /*
+         * -----------------------------------------------------
+         * GEOJSON SUBDIVISION ID
+         * -----------------------------------------------------
+         */
+
+        const subdivisionLgd =
+            properties.subdivision_id;
+
+
+        /*
+         * -----------------------------------------------------
+         * BLOCK NAME
+         * -----------------------------------------------------
+         */
+
+        const blockName =
+            properties.block_name ||
+            "Unknown Block";
+
+
+        /*
+         * -----------------------------------------------------
+         * DISTRICT NAME
+         * -----------------------------------------------------
+         */
+
+        const districtName =
+            properties.district ||
+            selectedDistrict.name ||
+            "";
+
+
+        /*
+         * -----------------------------------------------------
+         * SUBDIVISION NAME
+         * -----------------------------------------------------
+         */
+
+        const subdivisionName =
+            properties.subdivision_name ||
+            selectedSubdivision.name ||
+            "";
+
+
+        /*
+         * -----------------------------------------------------
+         * FIND EXISTING DATABASE BLOCK
+         * -----------------------------------------------------
+         *
+         * Database relationship:
+         *
+         * district_id
+         * subdivision_id
+         * name
+         *
+         * GeoJSON block_lgd is NOT used to find
+         * the database record because the two ID
+         * systems are different.
+         */
+
+        const databaseBlock =
+            databaseBlocks.find(
+                (item) => {
+
+                    const sameDistrict =
+                        Number(
+                            item.district_id
+                        ) ===
+                        Number(
+                            selectedDistrict.id
+                        );
+
+
+                    const sameSubdivision =
+                        Number(
+                            item.subdivision_id
+                        ) ===
+                        Number(
+                            selectedSubdivision.id
+                        );
+
+
+                    const sameName =
+                        String(
+                            item.name || ""
+                        )
+                            .trim()
+                            .toLowerCase() ===
+                        String(
+                            blockName || ""
+                        )
+                            .trim()
+                            .toLowerCase();
+
+
+                    return (
+                        sameDistrict &&
+                        sameSubdivision &&
+                        sameName
+                    );
+                }
+            );
+
+
+        /*
+         * -----------------------------------------------------
+         * Tooltip
+         * -----------------------------------------------------
+         */
+
+        layer.bindTooltip(
+            blockName,
+            {
+                sticky: true,
+                direction: "top",
+            }
+        );
+
+
+        /*
+         * -----------------------------------------------------
+         * Hover
+         * -----------------------------------------------------
+         */
+
+        layer.on({
+
+            mouseover: (event) => {
+
+                event.target.setStyle(
+                    MAP_STYLES.block.hover
+                );
+
+                event.target.bringToFront();
+            },
+
+
+            mouseout: (event) => {
+
+                event.target.setStyle(
+                    MAP_STYLES.block.normal
+                );
+            },
+
+
+            /*
+             * -------------------------------------------------
+             * Click
+             * -------------------------------------------------
+             */
 
-							/*
-							 * IMPORTANT:
-							 *
-							 * Map filtering uses
-							 * GEOJSON IDs.
-							 */
+            click: (event) => {
+
+                const {
+                    lat,
+                    lng,
+                } = event.latlng;
 
-							const districtMatches =
-								Number(
-									districtLgd
-								) ===
-								Number(
-									selectedDistrict.dist_lgd
-								);
 
+                /*
+                 * -------------------------------------------------
+                 * Parent district validation
+                 * -------------------------------------------------
+                 */
 
-							const subdivisionMatches =
-								String(
-									subdivisionLgd ??
-									""
-								) ===
-								String(
-									selectedSubdivision.subdivision_lgd ??
-									selectedSubdivision.id ??
-									""
-								);
+                if (
+                    selectedDistrict.id === null ||
+                    selectedDistrict.id === undefined
+                ) {
 
+                    alert(
+                        "Please select an existing district first."
+                    );
 
-							return (
-								districtMatches &&
-								subdivisionMatches
-							);
+                    return;
+                }
 
-						}
-					),
 
-			}
-			: null;
+                /*
+                 * -------------------------------------------------
+                 * Parent subdivision validation
+                 * -------------------------------------------------
+                 */
 
+                if (
+                    selectedSubdivision.id === null ||
+                    selectedSubdivision.id === undefined
+                ) {
 
-	/*
-	|--------------------------------------------------------------------------
-	| Block Feature
-	|--------------------------------------------------------------------------
-	*/
+                    alert(
+                        "Please select an existing subdivision first."
+                    );
 
-	const onEachBlock = (
-		feature,
-		layer
-	) => {
+                    return;
+                }
 
-		const properties =
-			feature?.properties ||
-			{};
 
+                /*
+                 * -------------------------------------------------
+                 * FINAL BLOCK OBJECT
+                 * -------------------------------------------------
+                 */
 
-		/*
-		 * ---------------------------------------------------------------
-		 * GeoJSON values
-		 * ---------------------------------------------------------------
-		 */
+                const block = {
 
-		const blockLgd =
-			properties.block_lgd;
+                    /*
+                     * DATABASE BLOCK ID
+                     *
+                     * null = new block
+                     */
 
+                    id:
+                        databaseBlock?.id ??
+                        null,
 
-		const districtLgd =
-			properties.dist_lgd;
 
+                    /*
+                     * GEOJSON BLOCK ID
+                     */
 
-		const subdivisionLgd =
-			properties.subdivision_id;
+                    block_lgd:
+                        blockLgd,
 
 
-		const geoJsonBlockName =
-			properties.block_name ||
-			properties.block ||
-			properties.name ||
-			"Unknown Block";
+                    /*
+                     * DATABASE DISTRICT ID
+                     */
 
+                    districtId:
+                        selectedDistrict.id,
 
-		const geoJsonDistrictName =
-			properties.district ||
-			properties.dtname ||
-			selectedDistrict?.name ||
-			"";
 
+                    /*
+                     * GEOJSON DISTRICT ID
+                     */
 
-		const geoJsonSubdivisionName =
-			properties.subdivision_name ||
-			selectedSubdivision?.name ||
-			"";
+                    districtLgd:
+                        districtLgd,
 
 
-		/*
-		 * ---------------------------------------------------------------
-		 * Find DATABASE block
-		 * ---------------------------------------------------------------
-		 *
-		 * We first match using the currently
-		 * selected DB district/subdivision and
-		 * the block name.
-		 */
+                    /*
+                     * DISTRICT NAME
+                     */
 
-		const databaseBlock =
-			databaseBlocks.find(
-				(item) => {
+                    districtName:
+                        selectedDistrict.name ||
+                        districtName,
 
-					const sameDistrict =
-						Number(
-							item.district_id
-						) ===
-						Number(
-							selectedDistrict?.id
-						);
 
+                    /*
+                     * DATABASE SUBDIVISION ID
+                     */
 
-					const sameSubdivision =
-						Number(
-							item.subdivision_id
-						) ===
-						Number(
-							selectedSubdivision?.id
-						);
+                    subdivisionId:
+                        selectedSubdivision.id,
 
 
-					const sameName =
-						String(
-							item.name || ""
-						)
-							.trim()
-							.toLowerCase() ===
-						String(
-							geoJsonBlockName || ""
-						)
-							.trim()
-							.toLowerCase();
+                    /*
+                     * GEOJSON SUBDIVISION ID
+                     */
 
+                    subdivisionLgd:
+                        subdivisionLgd,
 
-					return (
-						sameDistrict &&
-						sameSubdivision &&
-						sameName
-					);
 
-				}
-			);
+                    /*
+                     * SUBDIVISION NAME
+                     */
 
+                    subdivisionName:
+                        selectedSubdivision.name ||
+                        subdivisionName,
 
-		/*
-		 * ---------------------------------------------------------------
-		 * Tooltip
-		 * ---------------------------------------------------------------
-		 */
 
-		layer.bindTooltip(
-			geoJsonBlockName,
-			{
-				sticky: true,
-				direction: "top",
-			}
-		);
+                    /*
+                     * BLOCK NAME
+                     */
 
+                    name:
+                        databaseBlock?.name ||
+                        blockName,
 
-		/*
-		 * ---------------------------------------------------------------
-		 * Hover
-		 * ---------------------------------------------------------------
-		 */
 
-		layer.on({
+                    /*
+                     * ADDRESS
+                     */
 
-			mouseover: (event) => {
+                    address:
+                        databaseBlock?.address ||
+                        "",
 
-				event.target.setStyle(
-					MAP_STYLES.block.hover
-				);
 
-				event.target.bringToFront();
+                    /*
+                     * COORDINATES
+                     */
 
-			},
+                    latitude:
+                        databaseBlock?.latitude ??
+                        lat,
 
+                    longitude:
+                        databaseBlock?.longitude ??
+                        lng,
 
-			mouseout: (event) => {
 
-				event.target.setStyle(
-					MAP_STYLES.block.normal
-				);
+                    /*
+                     * ORIGINAL GEOJSON
+                     */
 
-			},
+                    properties,
 
+                    feature,
 
-			/*
-			 * -----------------------------------------------------------
-			 * Click
-			 * -----------------------------------------------------------
-			 */
 
-			click: (event) => {
+                    /*
+                     * EXISTING DATABASE RECORD
+                     *
+                     * null = block has not been
+                     * created in database yet.
+                     */
 
-				const {
-					lat,
-					lng,
-				} = event.latlng;
+                    databaseBlock:
+                        databaseBlock ||
+                        null,
+                };
 
 
-				/*
-				 * IMPORTANT:
-				 *
-				 * If no database block exists,
-				 * do not treat the GeoJSON ID as
-				 * a database ID.
-				 */
+                console.log(
+                    "Selected block:",
+                    block
+                );
 
-				if (!databaseBlock) {
 
-					console.warn(
-						"No database block found for GeoJSON block:",
-						{
-							blockLgd,
-							blockName:
-								geoJsonBlockName,
+                onBlockSelect?.(
+                    block
+                );
+            },
+        });
+    };
 
-							districtLgd,
 
-							subdivisionLgd,
-						}
-					);
+    /*
+     * -------------------------------------------------------
+     * Error
+     * -------------------------------------------------------
+     */
 
+    if (error) {
 
-					alert(
-						`Block "${geoJsonBlockName}" is not available in the database yet.`
-					);
+        return (
+            <div className="absolute left-4 top-4 z-[1000] rounded-lg bg-red-100 px-4 py-3 text-sm text-red-700 shadow">
+                {error}
+            </div>
+        );
+    }
 
 
-					return;
+    /*
+     * -------------------------------------------------------
+     * No blocks found
+     * -------------------------------------------------------
+     */
 
-				}
+    if (
+        filteredBlockData.features.length === 0
+    ) {
 
+        console.warn(
+            "No blocks found for:",
+            {
+                district:
+                    selectedDistrict.name,
 
-				/*
-				 * -------------------------------------------------------
-				 * FINAL BLOCK OBJECT
-				 * -------------------------------------------------------
-				 *
-				 * id              = DATABASE ID
-				 * block_lgd       = GEOJSON ID
-				 *
-				 * districtId      = DATABASE ID
-				 * districtLgd     = GEOJSON ID
-				 *
-				 * subdivisionId   = DATABASE ID
-				 * subdivisionLgd  = GEOJSON ID
-				 */
+                districtLgd:
+                    selectedDistrict.dist_lgd,
 
-				const block = {
+                subdivision:
+                    selectedSubdivision.name,
 
-					/*
-					 * DATABASE BLOCK ID
-					 */
+                subdivisionLgd:
+                    selectedSubdivision.subdivision_lgd,
+            }
+        );
 
-					id:
-						databaseBlock.id,
+        return null;
+    }
 
 
-					/*
-					 * GEOJSON BLOCK ID
-					 */
+    /*
+     * -------------------------------------------------------
+     * Render
+     * -------------------------------------------------------
+     */
 
-					block_lgd:
-						blockLgd,
-
-
-					/*
-					 * DATABASE DISTRICT ID
-					 */
-
-					districtId:
-						databaseBlock.district_id,
-
-
-					/*
-					 * GEOJSON DISTRICT ID
-					 */
-
-					districtLgd:
-						districtLgd,
-
-
-					/*
-					 * DISTRICT NAME
-					 */
-
-					districtName:
-						databaseBlock.district_name ||
-						geoJsonDistrictName,
-
-
-					/*
-					 * DATABASE SUBDIVISION ID
-					 */
-
-					subdivisionId:
-						databaseBlock.subdivision_id,
-
-
-					/*
-					 * GEOJSON SUBDIVISION ID
-					 */
-
-					subdivisionLgd:
-						subdivisionLgd,
-
-
-					/*
-					 * SUBDIVISION NAME
-					 */
-
-					subdivisionName:
-						databaseBlock.subdivision_name ||
-						geoJsonSubdivisionName,
-
-
-					/*
-					 * BLOCK NAME
-					 */
-
-					name:
-						databaseBlock.name ||
-						geoJsonBlockName,
-
-
-					/*
-					 * ADDRESS FROM DATABASE
-					 */
-
-					address:
-						databaseBlock.address ||
-						"",
-
-
-					/*
-					 * EXACT MAP CLICK
-					 */
-
-					latitude:
-						lat,
-
-
-					longitude:
-						lng,
-
-
-					/*
-					 * Original data
-					 */
-
-					properties,
-
-					feature,
-
-					/*
-					 * Complete DB record
-					 */
-
-					databaseBlock,
-
-				};
-
-
-				console.log(
-					"Selected block:",
-					block
-				);
-
-
-				onBlockSelect?.(
-					block
-				);
-
-			},
-
-		});
-
-	};
-
-
-	/*
-	|--------------------------------------------------------------------------
-	| Error
-	|--------------------------------------------------------------------------
-	*/
-
-	if (error) {
-
-		return (
-
-			<div className="absolute left-4 top-4 z-[1000] rounded-lg bg-red-100 px-4 py-3 text-sm text-red-700 shadow">
-
-				{error}
-
-			</div>
-
-		);
-
-	}
-
-
-	/*
-	|--------------------------------------------------------------------------
-	| Selection Required
-	|--------------------------------------------------------------------------
-	*/
-
-	if (!selectedDistrict) {
-		return null;
-	}
-
-
-	if (!selectedSubdivision) {
-		return null;
-	}
-
-
-	if (!blockData) {
-		return null;
-	}
-
-
-	/*
-	|--------------------------------------------------------------------------
-	| No Blocks
-	|--------------------------------------------------------------------------
-	*/
-
-	if (
-		!filteredBlockData ||
-		filteredBlockData.features.length === 0
-	) {
-
-		console.warn(
-			"No blocks found for subdivision:",
-			selectedSubdivision
-		);
-
-		return null;
-
-	}
-
-
-	/*
-	|--------------------------------------------------------------------------
-	| Render
-	|--------------------------------------------------------------------------
-	*/
-
-	return (
-
-		<GeoJSON
-
-			key={
-				`blocks-${selectedDistrict.dist_lgd}-${selectedSubdivision.subdivision_lgd ?? selectedSubdivision.id}`
-			}
-
-			data={
-				filteredBlockData
-			}
-
-			style={
-				MAP_STYLES.block.normal
-			}
-
-			onEachFeature={
-				onEachBlock
-			}
-
-		/>
-
-	);
-
+    return (
+        <GeoJSON
+            key={
+                `blocks-${selectedDistrict.dist_lgd}-${selectedSubdivision.subdivision_lgd}`
+            }
+            data={
+                filteredBlockData
+            }
+            style={
+                MAP_STYLES.block.normal
+            }
+            onEachFeature={
+                onEachBlock
+            }
+        />
+    );
 }
-
-
-export default BlocksLayer;
