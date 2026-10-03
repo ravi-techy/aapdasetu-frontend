@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
   listUsers,
@@ -6,7 +5,15 @@ import {
   updateUser,
   deleteUser,
 } from "../../../services";
-import { UserCog, Plus, X, RefreshCw, Trash2, Pencil } from "lucide-react";
+import {
+  UserCog,
+  Plus,
+  X,
+  RefreshCw,
+  Trash2,
+  Pencil,
+  Search,
+} from "lucide-react";
 
 const EMPTY_FORM = {
   name: "",
@@ -34,23 +41,38 @@ const getUserRole = (user) => {
 
 function Admin() {
   const [users, setUsers] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+
   const [editingUserId, setEditingUserId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [updatingUserId, setUpdatingUserId] = useState(null);
+
+  // Pagination
   const [page, setPage] = useState(1);
 
   const [pagination, setPagination] = useState({
     total: 0,
-    per_page: 20,
+    per_page: 5,
     current_page: 1,
     total_pages: 1,
     has_next: false,
     has_prev: false,
   });
+
+  // Search
+  const [search, setSearch] = useState("");
+
+  // ---------------------------------------------------------------------------
+  // Fetch users
+  // ---------------------------------------------------------------------------
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -60,23 +82,31 @@ function Admin() {
       const res = await listUsers({
         role: "admin",
         page,
-        per_page: 20,
+        per_page: 5,
+        status: "active"
       });
 
-      setUsers(res?.data?.users ?? res?.data ?? []);
+      const userList = Array.isArray(res?.data?.users)
+        ? res.data.users
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+      setUsers(userList);
 
       setPagination(
         res?.data?.pagination ?? {
-          total: 0,
-          per_page: 20,
+          total: userList.length,
+          per_page: 5,
           current_page: page,
           total_pages: 1,
           has_next: false,
           has_prev: false,
-        },
+        }
       );
     } catch (err) {
       setError(err.message || "Failed to load users");
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -85,6 +115,10 @@ function Admin() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // ---------------------------------------------------------------------------
+  // Form
+  // ---------------------------------------------------------------------------
 
   const handleChange = (e) => {
     setForm((prev) => ({
@@ -99,25 +133,92 @@ function Admin() {
     setShowForm(false);
   };
 
+  // ---------------------------------------------------------------------------
+  // Edit
+  // ---------------------------------------------------------------------------
+
   const handleEdit = (user) => {
-    setForm({
+    setEditingUserId(user.id);
+
+    setEditingUser({
       name: user.name || "",
       email: user.email || "",
       phone: user.phone || "",
-      password: "",
-      confirmPassword: "",
     });
 
-    setEditingUserId(user.id);
-    setShowForm(true);
     setError("");
     setSuccess("");
   };
 
+  const handleInlineChange = (e) => {
+    const { name, value } = e.target;
+
+    setEditingUser((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleInlineUpdate = async (userId) => {
+    if (!editingUser) return;
+
+    if (
+      !editingUser.name.trim() ||
+      !editingUser.email.trim() ||
+      !editingUser.phone.trim()
+    ) {
+      setError("Name, Email and Phone are required.");
+      return;
+    }
+
+    setUpdatingUserId(userId);
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = {
+        name: editingUser.name.trim(),
+        email: editingUser.email.trim(),
+        phone: editingUser.phone.trim(),
+        role: "admin",
+      };
+
+      const res = await updateUser(userId, payload);
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId
+            ? { ...user, ...res.data }
+            : user
+        )
+      );
+
+      setSuccess(
+        `User "${res.data?.name || editingUser.name}" updated successfully.`
+      );
+
+      setEditingUserId(null);
+      setEditingUser(null);
+    } catch (err) {
+      setError(err.message || "Failed to update user");
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const handleInlineCancel = () => {
+    setEditingUserId(null);
+    setEditingUser(null);
+    setError("");
+  };
+
+  // ---------------------------------------------------------------------------
+  // Create / Update
+  // ---------------------------------------------------------------------------
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Basic validation
     if (
       !form.name.trim() ||
       !form.email.trim() ||
@@ -125,15 +226,12 @@ function Admin() {
       (!editingUserId && !form.password)
     ) {
       setError(
-        `Name, Email, Phone${
-          editingUserId ? "" : " and Password"
-        } are required.`,
+        `Name, Email, Phone${editingUserId ? "" : " and Password"
+        } are required.`
       );
       return;
     }
 
-    // Frontend-only password confirmation.
-    // confirmPassword is NEVER sent to the backend.
     if (form.password) {
       if (!form.confirmPassword) {
         setError("Please confirm your password.");
@@ -151,8 +249,6 @@ function Admin() {
     setSuccess("");
 
     try {
-      // Only API fields go into this payload.
-      // confirmPassword is intentionally excluded.
       const payload = {
         name: form.name.trim(),
         email: form.email.trim(),
@@ -160,35 +256,31 @@ function Admin() {
         role: "admin",
       };
 
-      // Send password only when user entered one.
       if (form.password) {
         payload.password = form.password;
       }
 
       if (editingUserId) {
-        // Update existing user
         const res = await updateUser(editingUserId, payload);
 
         setUsers((prev) =>
           prev.map((user) =>
             user.id === editingUserId
               ? { ...user, ...res.data }
-              : user,
-          ),
+              : user
+          )
         );
 
         setSuccess(
-          `User "${res.data?.name || form.name}" updated successfully.`,
+          `User "${res.data?.name || form.name}" updated successfully.`
         );
       } else {
-        // Create new user
-        // confirmPassword is NOT included.
         const res = await createUser(payload);
 
         setUsers((prev) => [res.data, ...prev]);
 
         setSuccess(
-          `User "${res.data?.name || form.name}" created successfully.`,
+          `User "${res.data?.name || form.name}" created successfully.`
         );
       }
 
@@ -196,35 +288,69 @@ function Admin() {
     } catch (err) {
       setError(
         err.message ||
-          `Failed to ${
-            editingUserId ? "update" : "create"
-          } user`,
+        `Failed to ${editingUserId ? "update" : "create"
+        } user`
       );
     } finally {
       setSubmitting(false);
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Delete
+  // ---------------------------------------------------------------------------
+
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete user "${name}"?`)) return;
+    if (!window.confirm(`Deactivate user "${name}"?`)) return;
 
     try {
+      setError("");
+      setSuccess("");
+
       await deleteUser(id);
 
       setUsers((prev) =>
-        prev.filter((user) => user.id !== id),
+        prev.filter((user) => user.id !== id)
       );
 
-      setSuccess(`User "${name}" deleted successfully.`);
+      setSuccess(`User "${name}" deactivated successfully.`);
+
+      // If current page becomes empty after deletion,
+      // move back one page.
+      if (users.length === 1 && page > 1) {
+        setPage((prev) => Math.max(1, prev - 1));
+      } else {
+        fetchUsers();
+      }
     } catch (err) {
-      setError(err.message || "Failed to delete user");
+      setError(err.message || "Failed to deactivate user");
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Search
+  // ---------------------------------------------------------------------------
+
+  const query = search.toLowerCase().trim();
+
   const systemUsers = users.filter(
     (user) =>
-      getUserRole(user).toLowerCase() === "admin",
+      getUserRole(user).toLowerCase() === "admin"
   );
+
+  const filteredUsers = systemUsers.filter((user) => {
+    if (!query) return true;
+
+    return (
+      user.name?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query) ||
+      user.phone?.toLowerCase().includes(query)
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-8">
@@ -267,6 +393,11 @@ function Admin() {
                 setShowForm(!showForm);
                 setError("");
                 setSuccess("");
+
+                if (showForm) {
+                  setEditingUserId(null);
+                  setForm({ ...EMPTY_FORM });
+                }
               }}
               className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
             >
@@ -300,11 +431,10 @@ function Admin() {
 
         {/* Create / Edit Form */}
         <div
-          className={`grid transition-all duration-300 ease-in-out ${
-            showForm
+          className={`grid transition-all duration-300 ease-in-out ${showForm
               ? "mb-6 grid-rows-[1fr] opacity-100"
               : "pointer-events-none grid-rows-[0fr] opacity-0"
-          }`}
+            }`}
         >
           <div className="overflow-hidden">
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -370,7 +500,7 @@ function Admin() {
                     />
                   </div>
 
-                  {/* Confirm Password - FRONTEND ONLY */}
+                  {/* Confirm Password */}
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
                       Confirm Password
@@ -407,7 +537,6 @@ function Admin() {
                   </div>
                 </div>
 
-                {/* Form Buttons */}
                 <div className="mt-5 flex justify-end gap-3">
                   <button
                     type="button"
@@ -439,17 +568,48 @@ function Admin() {
         {/* Table */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
-          <div className="border-b border-slate-200 px-6 py-4">
-            <h2 className="font-semibold text-slate-900">
-              Admin Users{" "}
-              {!loading && (
-                <span className="ml-1 text-sm font-normal text-slate-500">
-                  ({systemUsers.length})
-                </span>
-              )}
-            </h2>
+          {/* Table Header + Search */}
+          <div className="border-b border-slate-200 px-5 py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+              <h2 className="font-semibold text-slate-900">
+                Admin Users{" "}
+                {!loading && (
+                  <span className="ml-1 text-sm font-normal text-slate-500">
+                    ({filteredUsers.length})
+                  </span>
+                )}
+              </h2>
+
+              {/* Search */}
+              <div className="relative w-full sm:w-72">
+                <Search
+                  size={17}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search name, email, phone..."
+                  className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-9 text-sm outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                />
+
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
+          {/* Loading */}
           {loading ? (
             <div className="flex items-center justify-center py-20 text-sm text-slate-500">
               Loading users…
@@ -465,6 +625,25 @@ function Admin() {
                 No users found
               </p>
             </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Search
+                size={36}
+                className="mb-2 text-slate-200"
+              />
+
+              <p className="text-sm text-slate-500">
+                No users found for "{search}".
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="mt-3 text-sm font-medium text-green-600 hover:text-green-700"
+              >
+                Clear search
+              </button>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -474,15 +653,19 @@ function Admin() {
                     <th className="px-5 py-3 font-semibold">
                       Name
                     </th>
+
                     <th className="px-5 py-3 font-semibold">
                       Email
                     </th>
+
                     <th className="px-5 py-3 font-semibold">
                       Phone
                     </th>
+
                     <th className="px-5 py-3 font-semibold">
                       Status
                     </th>
+
                     <th className="px-5 py-3 font-semibold">
                       Action
                     </th>
@@ -490,126 +673,224 @@ function Admin() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {systemUsers.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="transition-colors hover:bg-slate-50"
-                    >
-                      <td className="px-5 py-3 font-medium text-slate-800">
-                        {user.name}
-                      </td>
+                  {filteredUsers.map((user) => {
+                    const isEditing = editingUserId === user.id;
+                    const isUpdating = updatingUserId === user.id;
 
-                      <td className="px-5 py-3 text-slate-600">
-                        {user.email}
-                      </td>
-
-                      <td className="px-5 py-3 text-slate-500">
-                        {user.phone || "—"}
-                      </td>
-
-                      <td className="px-5 py-3">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
-                            user.status === "active"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-slate-100 text-slate-500"
+                    return (
+                      <tr
+                        key={user.id}
+                        className={`transition-colors ${isEditing
+                            ? "bg-green-50/40"
+                            : "hover:bg-slate-50"
                           }`}
-                        >
-                          {user.status || "active"}
-                        </span>
-                      </td>
+                      >
+                        {/* Name */}
+                        <td className="px-5 py-3 font-medium text-slate-800">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              name="name"
+                              value={editingUser.name}
+                              onChange={handleInlineChange}
+                              className="w-full min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                              autoFocus
+                            />
+                          ) : (
+                            user.name
+                          )}
+                        </td>
 
-                      <td className="flex items-center gap-1 px-5 py-3">
-                        <button
-                          onClick={() => handleEdit(user)}
-                          className="rounded p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                          title="Edit"
-                        >
-                          <Pencil size={15} />
-                        </button>
+                        {/* Email */}
+                        <td className="px-5 py-3 text-slate-600">
+                          {isEditing ? (
+                            <input
+                              type="email"
+                              name="email"
+                              value={editingUser.email}
+                              onChange={handleInlineChange}
+                              className="w-full min-w-[200px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                            />
+                          ) : (
+                            user.email
+                          )}
+                        </td>
 
-                        <button
-                          onClick={() =>
-                            handleDelete(
-                              user.id,
-                              user.name,
-                            )
-                          }
-                          className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                          title="Delete"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        {/* Phone */}
+                        <td className="px-5 py-3 text-slate-500">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              name="phone"
+                              value={editingUser.phone}
+                              onChange={handleInlineChange}
+                              className="w-full min-w-[130px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                            />
+                          ) : (
+                            user.phone || "—"
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-5 py-3">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${user.status === "active"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-slate-100 text-slate-500"
+                              }`}
+                          >
+                            {user.status || "active"}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-5 py-3">
+                          {isEditing ? (
+                            <div className="flex items-center gap-1">
+                              {/* Save */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleInlineUpdate(user.id)
+                                }
+                                disabled={isUpdating}
+                                className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-100 hover:text-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Update"
+                              >
+                                {isUpdating ? (
+                                  <RefreshCw
+                                    size={16}
+                                    className="animate-spin"
+                                  />
+                                ) : (
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="17"
+                                    height="17"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M20 6 9 17l-5-5" />
+                                  </svg>
+                                )}
+                              </button>
+
+                              {/* Cancel */}
+                              <button
+                                type="button"
+                                onClick={handleInlineCancel}
+                                disabled={isUpdating}
+                                className="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-100 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Cancel"
+                              >
+                                <X size={17} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              {/* Edit */}
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(user)}
+                                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                                title="Edit"
+                              >
+                                <Pencil size={15} />
+                              </button>
+
+                              {/* Delete */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDelete(
+                                    user.id,
+                                    user.name
+                                  )
+                                }
+                                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                title="Delete"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
+
+          {/* Pagination */}
+          {!loading &&
+            pagination.total_pages > 1 && (
+              <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+                <p className="text-sm text-slate-500">
+                  Showing{" "}
+                  <span className="font-medium text-slate-700">
+                    {(pagination.current_page - 1) *
+                      pagination.per_page +
+                      1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-medium text-slate-700">
+                    {Math.min(
+                      pagination.current_page *
+                      pagination.per_page,
+                      pagination.total
+                    )}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium text-slate-700">
+                    {pagination.total}
+                  </span>{" "}
+                  users
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!pagination.has_prev}
+                    onClick={() =>
+                      setPage((prev) =>
+                        Math.max(1, prev - 1)
+                      )
+                    }
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+
+                  <span className="rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
+                    Page {pagination.current_page} of{" "}
+                    {pagination.total_pages}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={!pagination.has_next}
+                    onClick={() =>
+                      setPage((prev) => prev + 1)
+                    }
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
         </div>
-
-        {/* Pagination */}
-        {!loading && pagination.total_pages > 1 && (
-          <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-            <p className="text-sm text-slate-500">
-              Showing{" "}
-              <span className="font-medium text-slate-700">
-                {(pagination.current_page - 1) *
-                  pagination.per_page +
-                  1}
-              </span>{" "}
-              to{" "}
-              <span className="font-medium text-slate-700">
-                {Math.min(
-                  pagination.current_page *
-                    pagination.per_page,
-                  pagination.total,
-                )}
-              </span>{" "}
-              of{" "}
-              <span className="font-medium text-slate-700">
-                {pagination.total}
-              </span>{" "}
-              users
-            </p>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={!pagination.has_prev}
-                onClick={() =>
-                  setPage((prev) =>
-                    Math.max(1, prev - 1),
-                  )
-                }
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Previous
-              </button>
-
-              <span className="rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
-                Page {pagination.current_page} of{" "}
-                {pagination.total_pages}
-              </span>
-
-              <button
-                type="button"
-                disabled={!pagination.has_next}
-                onClick={() =>
-                  setPage((prev) => prev + 1)
-                }
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
 export default Admin;
+
