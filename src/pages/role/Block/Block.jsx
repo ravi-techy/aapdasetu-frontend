@@ -5,11 +5,11 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  listSubdivisions,
 } from "../../../services";
 
 import { listBlocks } from "../../../services/blockService";
 import { listDistricts } from "../../../services/districtService";
-import { listSubdivisions } from "../../../services/subdivisionService";
 
 import {
   Layers,
@@ -576,8 +576,8 @@ function Block() {
         {/* Create Form */}
         <div
           className={`grid transition-all duration-300 ease-in-out ${showForm
-              ? "mb-6 grid-rows-[1fr] opacity-100"
-              : "grid-rows-[0fr] opacity-0 pointer-events-none"
+            ? "mb-6 grid-rows-[1fr] opacity-100"
+            : "grid-rows-[0fr] opacity-0 pointer-events-none"
             }`}
         >
           <div className="overflow-hidden">
@@ -1083,8 +1083,8 @@ function Block() {
                         <td className="px-5 py-3">
                           <span
                             className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${u.status === "active"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-slate-100 text-slate-500"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-slate-100 text-slate-500"
                               }`}
                           >
                             {u.status || "active"}

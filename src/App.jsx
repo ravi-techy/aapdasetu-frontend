@@ -91,7 +91,7 @@ function SessionExpiredAlert() {
             onClick={handleLoginRedirect}
             className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
           >
-            Go to Login
+            Let's Login
           </button>
         </div>
       </div>
@@ -129,7 +129,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/emergency" element={<Emergency />} />
 
-              
+
 
               {/* =========================
                 Location / User Mgmt
