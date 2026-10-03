@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 
-import React, { useState, useEffect, useCallback } from "react";
 import {
   listUsers,
   createUser,
@@ -7,6 +7,7 @@ import {
   deleteUser,
   listDistricts,
 } from "../../../services";
+
 import {
   MapPin,
   Plus,
@@ -15,6 +16,9 @@ import {
   Trash2,
   Pencil,
   Check,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const EMPTY_FORM = {
@@ -25,6 +29,8 @@ const EMPTY_FORM = {
   confirmPassword: "",
   linked_id: "",
 };
+
+const ITEMS_PER_PAGE = 10;
 
 function District() {
   const [users, setUsers] = useState([]);
@@ -49,6 +55,10 @@ function District() {
     linked_id: "",
   });
 
+  // Search + pagination
+  const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+
   /* --------------------------------
      Load district users
   -------------------------------- */
@@ -62,12 +72,16 @@ function District() {
         page: 1,
         per_page: 50,
       });
-
-      setUsers(res?.data?.users ?? res?.data ?? []);
-    } catch (err) {
-      setError(
-        err.message || "Failed to load district users",
+      console.log("DISTRICT USERS RESPONSE:", res);
+      setUsers(
+        Array.isArray(res?.data?.users)
+          ? res.data.users
+          : Array.isArray(res?.data)
+            ? res.data
+            : []
       );
+    } catch (err) {
+      setError(err.message || "Failed to load district users");
     } finally {
       setLoading(false);
     }
@@ -82,11 +96,16 @@ function District() {
     try {
       const res = await listDistricts();
 
-      setDistricts(res?.data ?? []);
+      const districtList = Array.isArray(res?.data?.districts)
+        ? res.data.districts
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+      setDistricts(districtList);
     } catch (err) {
-      setError(
-        err.message || "Failed to load districts",
-      );
+      setError(err.message || "Failed to load districts");
+      setDistricts([]);
     } finally {
       setDistrictsLoading(false);
     }
@@ -121,7 +140,6 @@ function District() {
     setError("");
     setSuccess("");
 
-    // Required field validation
     if (
       !form.name.trim() ||
       !form.email.trim() ||
@@ -130,31 +148,24 @@ function District() {
       !form.password
     ) {
       setError(
-        "Name, Email, Phone, District and Password are required.",
+        "Name, Email, Phone, District and Password are required."
       );
       return;
     }
 
-    // Frontend-only password confirmation
     if (!form.confirmPassword) {
       setError("Please confirm your password.");
       return;
     }
 
     if (form.password !== form.confirmPassword) {
-      setError(
-        "Password and Confirm Password do not match.",
-      );
+      setError("Password and Confirm Password do not match.");
       return;
     }
 
     setSubmitting(true);
 
     try {
-      /*
-       * confirmPassword is intentionally NOT included.
-       * It is used only for frontend validation.
-       */
       const payload = {
         name: form.name.trim(),
         email: form.email.trim(),
@@ -166,22 +177,17 @@ function District() {
 
       const res = await createUser(payload);
 
-      setUsers((prev) => [
-        res.data,
-        ...prev,
-      ]);
+      setUsers((prev) => [res.data, ...prev]);
 
       setSuccess(
-        `District user "${
-          res.data?.name || form.name
-        }" created successfully.`,
+        `District user "${res.data?.name || form.name
+        }" created successfully.`
       );
 
+      setCurrentPage(1);
       resetForm();
     } catch (err) {
-      setError(
-        err.message || "Failed to create user",
-      );
+      setError(err.message || "Failed to create user");
     } finally {
       setSubmitting(false);
     }
@@ -198,9 +204,10 @@ function District() {
       email: user.email || "",
       phone: user.phone || "",
       linked_id:
-        user.linked_id ||
-        user.districtId ||
-        user.district?.id ||
+        user.district_id ??
+        user.districtId ??
+        user.linked_id ??
+        user.district?.id ??
         "",
     });
 
@@ -219,7 +226,7 @@ function District() {
       !editData.linked_id
     ) {
       setError(
-        "Name, Email, Phone and District are required.",
+        "Name, Email, Phone and District are required."
       );
       return;
     }
@@ -243,17 +250,15 @@ function District() {
         prev.map((user) =>
           user.id === id
             ? { ...user, ...res.data }
-            : user,
-        ),
+            : user
+        )
       );
 
       setEditId(null);
 
       setSuccess("District user updated successfully.");
     } catch (err) {
-      setError(
-        err.message || "Failed to update user",
-      );
+      setError(err.message || "Failed to update user");
     }
   };
 
@@ -261,28 +266,25 @@ function District() {
      Delete user
   -------------------------------- */
   const handleDelete = async (id, name) => {
-    if (
-      !window.confirm(
-        `Delete district user "${name}"?`,
-      )
-    ) {
+    if (!window.confirm(`Delete district user "${name}"?`)) {
       return;
     }
 
     try {
+      setError("");
+      setSuccess("");
+
       await deleteUser(id);
 
       setUsers((prev) =>
-        prev.filter((user) => user.id !== id),
+        prev.filter((user) => user.id !== id)
       );
 
       setSuccess(
-        `District user "${name}" deleted successfully.`,
+        `District user "${name}" deleted successfully.`
       );
     } catch (err) {
-      setError(
-        err.message || "Failed to delete user",
-      );
+      setError(err.message || "Failed to delete user");
     }
   };
 
@@ -290,6 +292,7 @@ function District() {
      Get district name
   -------------------------------- */
   const getDistrictName = (user) => {
+    console.log('user :', user)
     if (user.district?.name) {
       return user.district.name;
     }
@@ -302,21 +305,102 @@ function District() {
       return user.districtName;
     }
 
+    if (user.linked_name) {
+      return user.linked_name;
+    }
+
     const districtId =
-      user.linked_id ||
-      user.districtId;
+      user.district_id ??
+      user.districtId ??
+      user.linked_id ??
+      user.linkedId ??
+      user.district?.id;
 
     const district = districts.find(
       (item) =>
-        String(item.id) === String(districtId),
+        String(item.id) === String(districtId)
     );
 
     return district?.name || "—";
   };
 
+  /* --------------------------------
+     Search
+  -------------------------------- */
+  const filteredUsers = useMemo(() => {
+    const query = search.toLowerCase().trim();
+
+    if (!query) {
+      return users;
+    }
+
+    return users.filter((user) => {
+      const districtName = getDistrictName(user);
+
+      return (
+        user.name?.toLowerCase().includes(query) ||
+        user.email?.toLowerCase().includes(query) ||
+        user.phone?.toLowerCase().includes(query) ||
+        districtName.toLowerCase().includes(query)
+      );
+    });
+  }, [users, search, districts]);
+
+  /* --------------------------------
+     Pagination
+  -------------------------------- */
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredUsers.length / ITEMS_PER_PAGE)
+  );
+
+  const paginatedUsers = useMemo(() => {
+    const startIndex =
+      (currentPage - 1) * ITEMS_PER_PAGE;
+
+    return filteredUsers.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE
+    );
+  }, [filteredUsers, currentPage]);
+
+  /* --------------------------------
+     Reset pagination when search changes
+  -------------------------------- */
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  /* --------------------------------
+     Keep current page valid
+  -------------------------------- */
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const startResult =
+    filteredUsers.length === 0
+      ? 0
+      : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+
+  const endResult = Math.min(
+    currentPage * ITEMS_PER_PAGE,
+    filteredUsers.length
+  );
+
+  /* --------------------------------
+     Page numbers
+  -------------------------------- */
+  const pageNumbers = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
 
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -394,11 +478,10 @@ function District() {
 
         {/* Create Form */}
         <div
-          className={`grid transition-all duration-300 ease-in-out ${
-            showForm
+          className={`grid transition-all duration-300 ease-in-out ${showForm
               ? "mb-6 grid-rows-[1fr] opacity-100"
               : "pointer-events-none grid-rows-[0fr] opacity-0"
-          }`}
+            }`}
         >
           <div className="overflow-hidden">
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -531,8 +614,7 @@ function District() {
                   <button
                     type="submit"
                     disabled={
-                      submitting ||
-                      districtsLoading
+                      submitting || districtsLoading
                     }
                     className="rounded-lg bg-purple-600 px-5 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -549,17 +631,50 @@ function District() {
         {/* Table */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
+          {/* Table Header + Search */}
           <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="font-semibold text-slate-900">
-              District Users{" "}
-              {!loading && (
-                <span className="ml-1 text-sm font-normal text-slate-500">
-                  ({users.length})
-                </span>
-              )}
-            </h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+              <h2 className="font-semibold text-slate-900">
+                District Users{" "}
+                {!loading && (
+                  <span className="ml-1 text-sm font-normal text-slate-500">
+                    ({filteredUsers.length})
+                  </span>
+                )}
+              </h2>
+
+              {/* Search */}
+              <div className="relative w-full sm:w-80">
+                <Search
+                  size={17}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) =>
+                    setSearch(e.target.value)
+                  }
+                  placeholder="Search name, email, phone, district..."
+                  className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-9 text-sm outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                />
+
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
+          {/* Loading */}
           {loading ? (
             <div className="flex items-center justify-center py-16 text-sm text-slate-500">
               Loading…
@@ -575,205 +690,305 @@ function District() {
                 No district users yet. Add one above.
               </p>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+          ) : filteredUsers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Search
+                size={36}
+                className="mb-2 text-slate-200"
+              />
 
-                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-5 py-3 font-semibold">
-                      Name
-                    </th>
+              <p className="text-sm text-slate-500">
+                No users found for "{search}".
+              </p>
 
-                    <th className="px-5 py-3 font-semibold">
-                      Email
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Phone
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      District
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Status
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {users.map((u) => (
-                    <tr
-                      key={u.id}
-                      className="transition-colors hover:bg-slate-50"
-                    >
-
-                      {/* Name */}
-                      <td className="px-5 py-3 font-medium text-slate-800">
-                        {editId === u.id ? (
-                          <input
-                            value={editData.name}
-                            onChange={(e) =>
-                              setEditData((prev) => ({
-                                ...prev,
-                                name: e.target.value,
-                              }))
-                            }
-                            className="w-36 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-purple-400"
-                          />
-                        ) : (
-                          u.name
-                        )}
-                      </td>
-
-                      {/* Email */}
-                      <td className="px-5 py-3 text-slate-600">
-                        {editId === u.id ? (
-                          <input
-                            value={editData.email}
-                            onChange={(e) =>
-                              setEditData((prev) => ({
-                                ...prev,
-                                email: e.target.value,
-                              }))
-                            }
-                            className="w-44 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-purple-400"
-                          />
-                        ) : (
-                          u.email
-                        )}
-                      </td>
-
-                      {/* Phone */}
-                      <td className="px-5 py-3 text-slate-500">
-                        {editId === u.id ? (
-                          <input
-                            value={editData.phone}
-                            onChange={(e) =>
-                              setEditData((prev) => ({
-                                ...prev,
-                                phone: e.target.value,
-                              }))
-                            }
-                            className="w-32 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-purple-400"
-                          />
-                        ) : (
-                          u.phone || "—"
-                        )}
-                      </td>
-
-                      {/* District */}
-                      <td className="px-5 py-3 text-slate-600">
-                        {editId === u.id ? (
-                          <select
-                            value={editData.linked_id}
-                            onChange={(e) =>
-                              setEditData((prev) => ({
-                                ...prev,
-                                linked_id:
-                                  e.target.value,
-                              }))
-                            }
-                            className="w-44 rounded border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-purple-400"
-                          >
-                            <option value="">
-                              Select District
-                            </option>
-
-                            {districts.map(
-                              (district) => (
-                                <option
-                                  key={district.id}
-                                  value={district.id}
-                                >
-                                  {district.name}
-                                </option>
-                              ),
-                            )}
-                          </select>
-                        ) : (
-                          getDistrictName(u)
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-5 py-3">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
-                            u.status === "active"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {u.status || "active"}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-5 py-3">
-                        <div className="flex gap-1">
-
-                          {editId === u.id ? (
-                            <>
-                              <button
-                                onClick={() =>
-                                  handleUpdate(u.id)
-                                }
-                                className="rounded p-1.5 text-green-600 transition-colors hover:bg-green-50"
-                                title="Save"
-                              >
-                                <Check size={14} />
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  setEditId(null)
-                                }
-                                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-100"
-                                title="Cancel"
-                              >
-                                <X size={14} />
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() =>
-                                  startEdit(u)
-                                }
-                                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
-                                title="Edit"
-                              >
-                                <Pencil size={14} />
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  handleDelete(
-                                    u.id,
-                                    u.name,
-                                  )
-                                }
-                                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                                title="Delete"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="mt-3 text-sm font-medium text-purple-600 hover:text-purple-700"
+              >
+                Clear search
+              </button>
             </div>
+          ) : (
+            <>
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3 font-semibold">
+                        Name
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Email
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Phone
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        District
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Status
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+                    {paginatedUsers.map((u) => (
+                      <tr
+                        key={u.id}
+                        className="transition-colors hover:bg-slate-50"
+                      >
+
+                        {/* Name */}
+                        <td className="px-5 py-3 font-medium text-slate-800">
+                          {editId === u.id ? (
+                            <input
+                              value={editData.name}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  name: e.target.value,
+                                }))
+                              }
+                              className="w-36 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-purple-400"
+                            />
+                          ) : (
+                            u.name
+                          )}
+                        </td>
+
+                        {/* Email */}
+                        <td className="px-5 py-3 text-slate-600">
+                          {editId === u.id ? (
+                            <input
+                              value={editData.email}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  email: e.target.value,
+                                }))
+                              }
+                              className="w-44 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-purple-400"
+                            />
+                          ) : (
+                            u.email
+                          )}
+                        </td>
+
+                        {/* Phone */}
+                        <td className="px-5 py-3 text-slate-500">
+                          {editId === u.id ? (
+                            <input
+                              value={editData.phone}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  phone: e.target.value,
+                                }))
+                              }
+                              className="w-32 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-purple-400"
+                            />
+                          ) : (
+                            u.phone || "—"
+                          )}
+                        </td>
+
+                        {/* District */}
+                        <td className="px-5 py-3 text-slate-600">
+                          {editId === u.id ? (
+                            <select
+                              value={editData.linked_id}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  linked_id: e.target.value,
+                                }))
+                              }
+                              className="w-44 rounded border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-purple-400"
+                            >
+                              <option value="">
+                                Select District
+                              </option>
+
+                              {districts.map(
+                                (district) => (
+                                  <option
+                                    key={district.id}
+                                    value={district.id}
+                                  >
+                                    {district.name}
+                                  </option>
+                                )
+                              )}
+                            </select>
+                          ) : (
+                            getDistrictName(u)
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-5 py-3">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${u.status === "active"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-slate-100 text-slate-500"
+                              }`}
+                          >
+                            {u.status || "active"}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-5 py-3">
+                          <div className="flex gap-1">
+
+                            {editId === u.id ? (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    handleUpdate(u.id)
+                                  }
+                                  className="rounded p-1.5 text-green-600 transition-colors hover:bg-green-50"
+                                  title="Save"
+                                >
+                                  <Check size={14} />
+                                </button>
+
+                                <button
+                                  onClick={() =>
+                                    setEditId(null)
+                                  }
+                                  className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-100"
+                                  title="Cancel"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    startEdit(u)
+                                  }
+                                  className="rounded p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                                  title="Edit"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+
+                                <button
+                                  onClick={() =>
+                                    handleDelete(
+                                      u.id,
+                                      u.name
+                                    )
+                                  }
+                                  className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+                {/* Results info */}
+                <div className="text-sm text-slate-500">
+                  Showing{" "}
+                  <span className="font-medium text-slate-700">
+                    {startResult}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-medium text-slate-700">
+                    {endResult}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium text-slate-700">
+                    {filteredUsers.length}
+                  </span>{" "}
+                  users
+                </div>
+
+                {/* Pagination buttons */}
+                <div className="flex items-center gap-1">
+
+                  {/* Previous */}
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() =>
+                      setCurrentPage((prev) =>
+                        Math.max(prev - 1, 1)
+                      )
+                    }
+                    className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft size={15} />
+                    <span className="hidden sm:inline">
+                      Previous
+                    </span>
+                  </button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {pageNumbers.map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage(page)
+                        }
+                        className={`min-w-[36px] rounded-lg px-3 py-2 text-sm font-medium ${currentPage === page
+                            ? "bg-purple-600 text-white"
+                            : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Next */}
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() =>
+                      setCurrentPage((prev) =>
+                        Math.min(prev + 1, totalPages)
+                      )
+                    }
+                    className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="hidden sm:inline">
+                      Next
+                    </span>
+                    <ChevronRight size={15} />
+                  </button>
+
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

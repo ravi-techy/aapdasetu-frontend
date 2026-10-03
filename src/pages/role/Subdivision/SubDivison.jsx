@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect, useCallback } from "react";
+
 import {
   listUsers,
   createUser,
@@ -17,6 +17,7 @@ import {
   Trash2,
   Pencil,
   Check,
+  Search,
 } from "lucide-react";
 
 const EMPTY_FORM = {
@@ -55,9 +56,22 @@ function SubDivison() {
     linked_id: "",
   });
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
+  // Search
+  // ---------------------------------------------------------------------------
+
+  const [search, setSearch] = useState("");
+
+  // ---------------------------------------------------------------------------
+  // Pagination
+  // ---------------------------------------------------------------------------
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // ---------------------------------------------------------------------------
   // Fetch subdivision users
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -69,13 +83,12 @@ function SubDivison() {
         page: 1,
         per_page: 50,
       });
-
       setUsers(
         Array.isArray(res?.data?.users)
           ? res.data.users
           : Array.isArray(res?.data)
-          ? res.data
-          : []
+            ? res.data
+            : []
       );
     } catch (err) {
       setError(err.message || "Failed to load subdivision users");
@@ -84,9 +97,9 @@ function SubDivison() {
     }
   }, []);
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // Fetch districts
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   const fetchDistricts = useCallback(async () => {
     setDistrictsLoading(true);
@@ -97,22 +110,24 @@ function SubDivison() {
       const districtList = Array.isArray(res?.data?.districts)
         ? res.data.districts
         : Array.isArray(res?.data)
-        ? res.data
-        : [];
+          ? res.data
+          : [];
 
       setDistricts(districtList);
     } catch (err) {
       console.error("Failed to load districts:", err);
+
       setDistricts([]);
+
       setError(err.message || "Failed to load districts");
     } finally {
       setDistrictsLoading(false);
     }
   }, []);
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // Fetch subdivisions
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   const fetchSubdivisions = useCallback(async () => {
     setSubdivisionsLoading(true);
@@ -120,25 +135,29 @@ function SubDivison() {
     try {
       const res = await listSubdivisions();
 
-      const subdivisionList = Array.isArray(res?.data?.subdivisions)
+      const subdivisionList = Array.isArray(
+        res?.data?.subdivisions
+      )
         ? res.data.subdivisions
         : Array.isArray(res?.data)
-        ? res.data
-        : [];
+          ? res.data
+          : [];
 
       setSubdivisions(subdivisionList);
     } catch (err) {
       console.error("Failed to load subdivisions:", err);
+
       setSubdivisions([]);
+
       setError(err.message || "Failed to load subdivisions");
     } finally {
       setSubdivisionsLoading(false);
     }
   }, []);
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // Initial fetch
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     fetchUsers();
@@ -146,9 +165,9 @@ function SubDivison() {
     fetchSubdivisions();
   }, [fetchUsers, fetchDistricts, fetchSubdivisions]);
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // Form
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -156,17 +175,24 @@ function SubDivison() {
     setForm((prev) => ({
       ...prev,
       [name]: value,
+      ...(name === "district_id" ? { linked_id: "" } : {}),
     }));
   };
 
+  const filteredSubdivisions = subdivisions.filter(
+    (subdivision) =>
+      Number(subdivision.district_id ?? subdivision.districtId) ===
+      Number(form.district_id)
+  );
+
   const resetForm = () => {
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM });
     setShowForm(false);
   };
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // Create subdivision user
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -203,6 +229,7 @@ function SubDivison() {
         email: form.email.trim(),
         phone: form.phone.trim(),
         password: form.password,
+
         role: "subdivision",
 
         district_id: Number(form.district_id),
@@ -218,8 +245,11 @@ function SubDivison() {
       }
 
       setSuccess(
-        `Subdivision user "${createdUser?.name || form.name}" created.`
+        `Subdivision user "${createdUser?.name || form.name
+        }" created.`
       );
+
+      setCurrentPage(1);
 
       resetForm();
     } catch (err) {
@@ -229,9 +259,9 @@ function SubDivison() {
     }
   };
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // Edit
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   const startEdit = (u) => {
     setEditId(u.id);
@@ -240,8 +270,14 @@ function SubDivison() {
       name: u.name || "",
       email: u.email || "",
       phone: u.phone || "",
-      district_id: u.district_id ?? "",
-      linked_id: u.linked_id ?? "",
+      district_id:
+        u.district_id ?? u.districtId ?? u.district?.id ?? "",
+      linked_id:
+        u.linked_id ??
+        u.subdivision_id ??
+        u.subdivisionId ??
+        u.subdivision?.id ??
+        "",
     });
 
     setError("");
@@ -258,6 +294,7 @@ function SubDivison() {
       setError(
         "Name, email, district and subdivision are required."
       );
+
       return;
     }
 
@@ -282,9 +319,9 @@ function SubDivison() {
         prev.map((u) =>
           u.id === id
             ? {
-                ...u,
-                ...res.data,
-              }
+              ...u,
+              ...res.data,
+            }
             : u
         )
       );
@@ -297,12 +334,16 @@ function SubDivison() {
     }
   };
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // Delete
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete subdivision user "${name}"?`)) {
+    if (
+      !window.confirm(
+        `Delete subdivision user "${name}"?`
+      )
+    ) {
       return;
     }
 
@@ -316,24 +357,133 @@ function SubDivison() {
         prev.filter((u) => u.id !== id)
       );
 
+      // Reset pagination after deleting
+      setCurrentPage(1);
+
       setSuccess("Subdivision user deleted.");
     } catch (err) {
       setError(err.message || "Failed to delete user");
     }
   };
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
+  // Search
+  // ---------------------------------------------------------------------------
+
+  const getLinkedSubdivision = (user) =>
+    subdivisions.find(
+      (subdivision) =>
+        Number(subdivision.id) ===
+        Number(
+          user.linked_id ??
+          user.subdivision_id ??
+          user.subdivisionId ??
+          user.subdivision?.id ??
+          user.linked_entity?.id
+        )
+    );
+
+  const getLinkedDistrict = (user, linkedSubdivision = getLinkedSubdivision(user)) =>
+    districts.find(
+      (district) =>
+        Number(district.id) ===
+        Number(
+          user.district_id ??
+          user.districtId ??
+          user.district?.id ??
+          linkedSubdivision?.district_id ??
+          linkedSubdivision?.districtId ??
+          linkedSubdivision?.district?.id
+        )
+    );
+
+  const filteredUsers = users.filter((u) => {
+    const query = search.toLowerCase().trim();
+
+    if (!query) return true;
+
+    const linkedSubdivision = getLinkedSubdivision(u);
+    const linkedDistrict = getLinkedDistrict(u, linkedSubdivision);
+
+    const districtName =
+      linkedDistrict?.name ||
+      u.district_name ||
+      u.district?.name ||
+      linkedSubdivision?.district?.name ||
+      u.linked_entity?.district?.name ||
+      "";
+
+    const subdivisionName =
+      linkedSubdivision?.name ||
+      u.linked_entity?.name ||
+      u.subdivision_name ||
+      u.subdivision?.name ||
+      u.linked_name ||
+      "";
+
+    return (
+      u.name?.toLowerCase().includes(query) ||
+      u.email?.toLowerCase().includes(query) ||
+      u.phone?.toLowerCase().includes(query) ||
+      districtName.toLowerCase().includes(query) ||
+      subdivisionName.toLowerCase().includes(query)
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Pagination
+  // ---------------------------------------------------------------------------
+
+  const totalPages = Math.ceil(
+    filteredUsers.length / itemsPerPage
+  );
+
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // ---------------------------------------------------------------------------
+  // Reset pagination when search changes
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  // ---------------------------------------------------------------------------
+  // Keep current page valid
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (
+      totalPages > 0 &&
+      currentPage > totalPages
+    ) {
+      setCurrentPage(totalPages);
+    }
+
+    if (
+      totalPages === 0 &&
+      currentPage !== 1
+    ) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
+  // ---------------------------------------------------------------------------
   // UI
-  // ────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-7xl">
 
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
           <div className="flex items-center gap-3">
+
             <Building2
               className="text-orange-500"
               size={28}
@@ -348,6 +498,7 @@ function SubDivison() {
                 Manage subdivisional office accounts
               </p>
             </div>
+
           </div>
 
           <div className="flex gap-2">
@@ -358,6 +509,7 @@ function SubDivison() {
                 fetchUsers();
                 fetchDistricts();
                 fetchSubdivisions();
+                setCurrentPage(1);
               }}
               className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
@@ -407,11 +559,10 @@ function SubDivison() {
         {/* Create Form */}
 
         <div
-          className={`grid transition-all duration-300 ease-in-out ${
-            showForm
+          className={`grid transition-all duration-300 ease-in-out ${showForm
               ? "mb-6 grid-rows-[1fr] opacity-100"
               : "grid-rows-[0fr] opacity-0 pointer-events-none"
-          }`}
+            }`}
         >
           <div className="overflow-hidden">
 
@@ -486,7 +637,7 @@ function SubDivison() {
                     </select>
                   </div>
 
-                 {/* Subdivision */}
+                  {/* Subdivision */}
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
                       Subdivision *
@@ -496,29 +647,35 @@ function SubDivison() {
                       name="linked_id"
                       value={form.linked_id}
                       onChange={handleChange}
-                      disabled={subdivisionsLoading}
+                      disabled={
+                        !form.district_id ||
+                        subdivisionsLoading ||
+                        districtsLoading
+                      }
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 disabled:bg-slate-100"
                     >
                       <option value="">
-                        {subdivisionsLoading
-                          ? "Loading subdivisions..."
-                          : "Select Subdivision"}
+                        {!form.district_id
+                          ? "Select district first"
+                          : subdivisionsLoading
+                            ? "Loading subdivisions..."
+                            : "Select Subdivision"}
                       </option>
 
-                      {subdivisions.map((subdivision) => (
-                        <option
-                          key={subdivision.id}
-                          value={subdivision.id}
-                        >
-                          {subdivision.name}
-                        </option>
-                      ))}
+                      {filteredSubdivisions.map(
+                        (subdivision) => (
+                          <option
+                            key={subdivision.id}
+                            value={subdivision.id}
+                          >
+                            {subdivision.name}
+                          </option>
+                        )
+                      )}
                     </select>
                   </div>
 
-                  
-
-                   {/* Phone */}
+                  {/* Phone */}
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
                       Phone *
@@ -532,8 +689,6 @@ function SubDivison() {
                       className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                     />
                   </div>
-
-                  
 
                   {/* Password */}
                   <div>
@@ -600,24 +755,64 @@ function SubDivison() {
 
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
+          {/* Table Header + Search */}
+
           <div className="border-b border-slate-200 px-5 py-4">
 
-            <h2 className="font-semibold text-slate-900">
-              Subdivision Users{" "}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-              {!loading && (
-                <span className="ml-1 text-sm font-normal text-slate-500">
-                  ({users.length})
-                </span>
-              )}
-            </h2>
+              <h2 className="font-semibold text-slate-900">
+                Subdivision Users{" "}
 
+                {!loading && (
+                  <span className="ml-1 text-sm font-normal text-slate-500">
+                    ({filteredUsers.length})
+                  </span>
+                )}
+              </h2>
+
+              {/* Search */}
+
+              <div className="relative w-full sm:w-72">
+
+                <Search
+                  size={17}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) =>
+                    setSearch(e.target.value)
+                  }
+                  placeholder="Search name, email, phone..."
+                  className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-9 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                />
+
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+
+              </div>
+
+            </div>
           </div>
 
+          {/* Loading */}
+
           {loading ? (
+
             <div className="flex items-center justify-center py-16 text-sm text-slate-500">
               Loading…
             </div>
+
           ) : users.length === 0 ? (
 
             <div className="flex flex-col items-center justify-center py-16">
@@ -633,306 +828,446 @@ function SubDivison() {
 
             </div>
 
-          ) : (
-
-            <div className="overflow-x-auto">
-
-              <table className="w-full text-left text-sm">
-
-                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-
-                  <tr>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Name
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Email
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Phone
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      District
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Subdivision
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Status
-                    </th>
-
-                    <th className="px-5 py-3 font-semibold">
-                      Actions
-                    </th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-
-                  {users.map((u) => {
-
-                    const linkedSubdivision =
-                      subdivisions.find(
-                        (subdivision) =>
-                          Number(subdivision.id) ===
-                          Number(u.linked_id)
-                      );
-
-                    const linkedDistrict =
-                      districts.find(
-                        (district) =>
-                          Number(district.id) ===
-                          Number(u.district_id)
-                      );
-
-                    return (
-                      <tr
-                        key={u.id}
-                        className="transition-colors hover:bg-slate-50"
-                      >
-
-                        {/* Name */}
-
-                        <td className="px-5 py-3 font-medium text-slate-800">
-
-                          {editId === u.id ? (
-                            <input
-                              value={editData.name}
-                              onChange={(e) =>
-                                setEditData((p) => ({
-                                  ...p,
-                                  name: e.target.value,
-                                }))
-                              }
-                              className="w-36 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-orange-400"
-                            />
-                          ) : (
-                            u.name
-                          )}
-
-                        </td>
-
-                        {/* Email */}
-
-                        <td className="px-5 py-3 text-slate-600">
-
-                          {editId === u.id ? (
-                            <input
-                              value={editData.email}
-                              onChange={(e) =>
-                                setEditData((p) => ({
-                                  ...p,
-                                  email: e.target.value,
-                                }))
-                              }
-                              className="w-44 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-orange-400"
-                            />
-                          ) : (
-                            u.email
-                          )}
-
-                        </td>
-
-                        {/* Phone */}
-
-                        <td className="px-5 py-3 text-slate-500">
-
-                          {editId === u.id ? (
-                            <input
-                              value={editData.phone}
-                              onChange={(e) =>
-                                setEditData((p) => ({
-                                  ...p,
-                                  phone: e.target.value,
-                                }))
-                              }
-                              className="w-32 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-orange-400"
-                            />
-                          ) : (
-                            u.phone || "—"
-                          )}
-
-                        </td>
-
-                        {/* District */}
-
-                        <td className="px-5 py-3 text-slate-600">
-
-                          {editId === u.id ? (
-
-                            <select
-                              value={editData.district_id}
-                              onChange={(e) =>
-                                setEditData((p) => ({
-                                  ...p,
-                                  district_id: e.target.value,
-                                }))
-                              }
-                              className="w-44 rounded border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-orange-400"
-                            >
-
-                              <option value="">
-                                Select District
-                              </option>
-
-                              {districts.map((district) => (
-                                <option
-                                  key={district.id}
-                                  value={district.id}
-                                >
-                                  {district.name}
-                                </option>
-                              ))}
-
-                            </select>
-
-                          ) : (
-
-                            linkedDistrict?.name ||
-                            u.district_name ||
-                            "—"
-
-                          )}
-
-                        </td>
-
-                        {/* Subdivision */}
-
-                        <td className="px-5 py-3 text-slate-600">
-
-                          {editId === u.id ? (
-
-                            <select
-                              value={editData.linked_id}
-                              onChange={(e) =>
-                                setEditData((p) => ({
-                                  ...p,
-                                  linked_id: e.target.value,
-                                }))
-                              }
-                              className="w-48 rounded border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-orange-400"
-                            >
-
-                              <option value="">
-                                Select Subdivision
-                              </option>
-
-                              {subdivisions.map(
-                                (subdivision) => (
-                                  <option
-                                    key={subdivision.id}
-                                    value={subdivision.id}
-                                  >
-                                    {subdivision.name}
-                                  </option>
-                                )
-                              )}
-
-                            </select>
-
-                          ) : (
-
-                            linkedSubdivision?.name ||
-                            u.subdivision_name ||
-                            u.linked_name ||
-                            "—"
-
-                          )}
-
-                        </td>
-
-                        {/* Status */}
-
-                        <td className="px-5 py-3">
-
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
-                              u.status === "active"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-slate-100 text-slate-500"
-                            }`}
-                          >
-                            {u.status || "active"}
-                          </span>
-
-                        </td>
-
-                        {/* Actions */}
-
-                        <td className="px-5 py-3">
-
-                          <div className="flex gap-1">
-
-                            {editId === u.id ? (
-                              <>
-
-                                <button
-                                  onClick={() =>
-                                    handleUpdate(u.id)
-                                  }
-                                  className="rounded p-1.5 text-green-600 transition-colors hover:bg-green-50"
-                                >
-                                  <Check size={14} />
-                                </button>
-
-                                <button
-                                  onClick={() =>
-                                    setEditId(null)
-                                  }
-                                  className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-100"
-                                >
-                                  <X size={14} />
-                                </button>
-
-                              </>
-                            ) : (
-                              <>
-
-                                <button
-                                  onClick={() =>
-                                    startEdit(u)
-                                  }
-                                  className="rounded p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-
-                                <button
-                                  onClick={() =>
-                                    handleDelete(
-                                      u.id,
-                                      u.name
-                                    )
-                                  }
-                                  className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-
-                              </>
-                            )}
-
-                          </div>
-
-                        </td>
-
-                      </tr>
-                    );
-                  })}
-
-                </tbody>
-
-              </table>
+          ) : filteredUsers.length === 0 ? (
+
+            <div className="flex flex-col items-center justify-center py-16">
+
+              <Search
+                size={36}
+                className="mb-2 text-slate-200"
+              />
+
+              <p className="text-sm text-slate-500">
+                No users found for "{search}".
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="mt-3 text-sm font-medium text-orange-500 hover:text-orange-600"
+              >
+                Clear search
+              </button>
 
             </div>
+
+          ) : (
+
+            <>
+              {/* Table */}
+
+              <div className="overflow-x-auto">
+
+                <table className="w-full text-left text-sm">
+
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+
+                    <tr>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Name
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Email
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Phone
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        District
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Subdivision
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Status
+                      </th>
+
+                      <th className="px-5 py-3 font-semibold">
+                        Actions
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+
+                    {paginatedUsers.map((u) => {
+                      const linkedSubdivision = getLinkedSubdivision(u);
+                      const linkedDistrict = getLinkedDistrict(
+                        u,
+                        linkedSubdivision
+                      );
+
+                      return (
+                        <tr
+                          key={u.id}
+                          className="transition-colors hover:bg-slate-50"
+                        >
+
+                          {/* Name */}
+
+                          <td className="px-5 py-3 font-medium text-slate-800">
+
+                            {editId === u.id ? (
+                              <input
+                                value={editData.name}
+                                onChange={(e) =>
+                                  setEditData((p) => ({
+                                    ...p,
+                                    name: e.target.value,
+                                  }))
+                                }
+                                className="w-36 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-orange-400"
+                              />
+                            ) : (
+                              u.name
+                            )}
+
+                          </td>
+
+                          {/* Email */}
+
+                          <td className="px-5 py-3 text-slate-600">
+
+                            {editId === u.id ? (
+                              <input
+                                value={editData.email}
+                                onChange={(e) =>
+                                  setEditData((p) => ({
+                                    ...p,
+                                    email: e.target.value,
+                                  }))
+                                }
+                                className="w-44 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-orange-400"
+                              />
+                            ) : (
+                              u.email
+                            )}
+
+                          </td>
+
+                          {/* Phone */}
+
+                          <td className="px-5 py-3 text-slate-500">
+
+                            {editId === u.id ? (
+                              <input
+                                value={editData.phone}
+                                onChange={(e) =>
+                                  setEditData((p) => ({
+                                    ...p,
+                                    phone: e.target.value,
+                                  }))
+                                }
+                                className="w-32 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-orange-400"
+                              />
+                            ) : (
+                              u.phone || "—"
+                            )}
+
+                          </td>
+
+                          {/* District */}
+
+                          <td className="px-5 py-3 text-slate-600">
+
+                            {editId === u.id ? (
+
+                              <select
+                                value={
+                                  editData.district_id
+                                }
+                                onChange={(e) =>
+                                  setEditData((p) => ({
+                                    ...p,
+                                    district_id:
+                                      e.target.value,
+                                  }))
+                                }
+                                className="w-44 rounded border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-orange-400"
+                              >
+
+                                <option value="">
+                                  Select District
+                                </option>
+
+                                {districts.map(
+                                  (district) => (
+                                    <option
+                                      key={district.id}
+                                      value={district.id}
+                                    >
+                                      {district.name}
+                                    </option>
+                                  )
+                                )}
+
+                              </select>
+
+                            ) : (
+
+                              linkedDistrict?.name ||
+                              u.district_name ||
+                              u.district?.name ||
+                              linkedSubdivision?.district?.name ||
+                              u.linked_entity?.district?.name ||
+                              "—"
+
+                            )}
+
+                          </td>
+
+                          {/* Subdivision */}
+
+                          <td className="px-5 py-3 text-slate-600">
+
+                            {editId === u.id ? (
+
+                              <select
+                                value={
+                                  editData.linked_id
+                                }
+                                onChange={(e) =>
+                                  setEditData((p) => ({
+                                    ...p,
+                                    linked_id:
+                                      e.target.value,
+                                  }))
+                                }
+                                className="w-48 rounded border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-orange-400"
+                              >
+
+                                <option value="">
+                                  Select Subdivision
+                                </option>
+
+                                {subdivisions.map(
+                                  (subdivision) => (
+                                    <option
+                                      key={subdivision.id}
+                                      value={subdivision.id}
+                                    >
+                                      {subdivision.name}
+                                    </option>
+                                  )
+                                )}
+
+                              </select>
+
+                            ) : (
+
+                              linkedSubdivision?.name ||
+                              u.linked_entity?.name ||
+                              u.subdivision_name ||
+                              u.subdivision?.name ||
+                              u.linked_name ||
+                              "—"
+
+                            )}
+
+                          </td>
+
+                          {/* Status */}
+
+                          <td className="px-5 py-3">
+
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${u.status === "active"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-slate-100 text-slate-500"
+                                }`}
+                            >
+                              {u.status || "active"}
+                            </span>
+
+                          </td>
+
+                          {/* Actions */}
+
+                          <td className="px-5 py-3">
+
+                            <div className="flex gap-1">
+
+                              {editId === u.id ? (
+
+                                <>
+
+                                  <button
+                                    onClick={() =>
+                                      handleUpdate(u.id)
+                                    }
+                                    className="rounded p-1.5 text-green-600 transition-colors hover:bg-green-50"
+                                    title="Save"
+                                  >
+                                    <Check size={14} />
+                                  </button>
+
+                                  <button
+                                    onClick={() =>
+                                      setEditId(null)
+                                    }
+                                    className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-100"
+                                    title="Cancel"
+                                  >
+                                    <X size={14} />
+                                  </button>
+
+                                </>
+
+                              ) : (
+
+                                <>
+
+                                  <button
+                                    onClick={() =>
+                                      startEdit(u)
+                                    }
+                                    className="rounded p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                                    title="Edit"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+
+                                  <button
+                                    onClick={() =>
+                                      handleDelete(
+                                        u.id,
+                                        u.name
+                                      )
+                                    }
+                                    className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+
+                                </>
+
+                              )}
+
+                            </div>
+
+                          </td>
+
+                        </tr>
+                      );
+                    })}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+              {/* Pagination */}
+
+              {totalPages > 1 && (
+                <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+                  {/* Showing */}
+
+                  <p className="text-sm text-slate-500">
+
+                    Showing{" "}
+
+                    <span className="font-medium text-slate-700">
+                      {(currentPage - 1) *
+                        itemsPerPage +
+                        1}
+                    </span>
+
+                    {" "}to{" "}
+
+                    <span className="font-medium text-slate-700">
+                      {Math.min(
+                        currentPage *
+                        itemsPerPage,
+                        filteredUsers.length
+                      )}
+                    </span>
+
+                    {" "}of{" "}
+
+                    <span className="font-medium text-slate-700">
+                      {filteredUsers.length}
+                    </span>
+
+                  </p>
+
+                  {/* Pagination Buttons */}
+
+                  <div className="flex flex-wrap items-center gap-1">
+
+                    {/* Previous */}
+
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() =>
+                        setCurrentPage((prev) =>
+                          Math.max(prev - 1, 1)
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+
+                    {/* Page Numbers */}
+
+                    {Array.from(
+                      {
+                        length: totalPages,
+                      },
+                      (_, index) => index + 1
+                    ).map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage(page)
+                        }
+                        className={`min-w-9 rounded-lg px-3 py-2 text-sm font-medium ${currentPage === page
+                            ? "bg-orange-500 text-white"
+                            : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    {/* Next */}
+
+                    <button
+                      type="button"
+                      disabled={
+                        currentPage === totalPages
+                      }
+                      onClick={() =>
+                        setCurrentPage((prev) =>
+                          Math.min(
+                            prev + 1,
+                            totalPages
+                          )
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+
+                  </div>
+
+                </div>
+              )}
+            </>
           )}
 
         </div>
@@ -942,4 +1277,3 @@ function SubDivison() {
 }
 
 export default SubDivison;
-

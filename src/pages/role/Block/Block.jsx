@@ -85,8 +85,8 @@ function Block() {
         Array.isArray(res?.data?.users)
           ? res.data.users
           : Array.isArray(res?.data)
-          ? res.data
-          : []
+            ? res.data
+            : []
       );
     } catch (err) {
       setError(err.message || "Failed to load block users");
@@ -108,8 +108,8 @@ function Block() {
       const districtList = Array.isArray(res?.data?.districts)
         ? res.data.districts
         : Array.isArray(res?.data)
-        ? res.data
-        : [];
+          ? res.data
+          : [];
 
       setDistricts(districtList);
     } catch (err) {
@@ -134,8 +134,8 @@ function Block() {
       const subdivisionList = Array.isArray(res?.data?.subdivisions)
         ? res.data.subdivisions
         : Array.isArray(res?.data)
-        ? res.data
-        : [];
+          ? res.data
+          : [];
 
       setSubdivisions(subdivisionList);
     } catch (err) {
@@ -160,8 +160,8 @@ function Block() {
       const blockList = Array.isArray(res?.data?.blocks)
         ? res.data.blocks
         : Array.isArray(res?.data)
-        ? res.data
-        : [];
+          ? res.data
+          : [];
 
       setBlocks(blockList);
     } catch (err) {
@@ -199,8 +199,25 @@ function Block() {
     setForm((prev) => ({
       ...prev,
       [name]: value,
+      ...(name === "district_id"
+        ? { subdivision_id: "", block_id: "" }
+        : name === "subdivision_id"
+          ? { block_id: "" }
+          : {}),
     }));
   };
+
+  const filteredSubdivisions = subdivisions.filter(
+    (subdivision) =>
+      Number(subdivision.district_id ?? subdivision.districtId) ===
+      Number(form.district_id)
+  );
+
+  const filteredBlocks = blocks.filter(
+    (block) =>
+      Number(block.subdivision_id ?? block.subdivisionId) ===
+      Number(form.subdivision_id)
+  );
 
   const resetForm = () => {
     setForm({ ...EMPTY_FORM });
@@ -290,9 +307,20 @@ function Block() {
       email: u.email || "",
       phone: u.phone || "",
 
-      district_id: u.district_id ?? "",
-      subdivision_id: u.subdivision_id ?? "",
-      block_id: u.block_id ?? u.linked_id ?? "",
+      district_id:
+        u.district_id ?? u.districtId ?? u.district?.id ?? "",
+      subdivision_id:
+        u.subdivision_id ??
+        u.subdivisionId ??
+        u.subdivision?.id ??
+        "",
+      block_id:
+        u.block_id ??
+        u.blockId ??
+        u.linked_id ??
+        u.linkedId ??
+        u.block?.id ??
+        "",
     });
 
     setError("");
@@ -338,9 +366,9 @@ function Block() {
         prev.map((u) =>
           u.id === id
             ? {
-                ...u,
-                ...res.data,
-              }
+              ...u,
+              ...res.data,
+            }
             : u
         )
       );
@@ -377,41 +405,86 @@ function Block() {
   // Search
   // ---------------------------------------------------------------------------
 
+  const getLinkedBlock = (user) =>
+    blocks.find(
+      (block) =>
+        Number(block.id) ===
+        Number(
+          user.block_id ??
+          user.blockId ??
+          user.linked_id ??
+          user.linkedId ??
+          user.block?.id ??
+          user.linked_entity?.id
+        )
+    );
+
+  const getLinkedSubdivision = (user, linkedBlock = getLinkedBlock(user)) =>
+    subdivisions.find(
+      (subdivision) =>
+        Number(subdivision.id) ===
+        Number(
+          user.subdivision_id ??
+          user.subdivisionId ??
+          user.subdivision?.id ??
+          linkedBlock?.subdivision_id ??
+          linkedBlock?.subdivisionId ??
+          linkedBlock?.subdivision?.id
+        )
+    );
+
+  const getLinkedDistrict = (
+    user,
+    linkedBlock = getLinkedBlock(user),
+    linkedSubdivision = getLinkedSubdivision(user, linkedBlock)
+  ) =>
+    districts.find(
+      (district) =>
+        Number(district.id) ===
+        Number(
+          user.district_id ??
+          user.districtId ??
+          user.district?.id ??
+          linkedBlock?.district_id ??
+          linkedBlock?.districtId ??
+          linkedBlock?.district?.id ??
+          linkedSubdivision?.district_id ??
+          linkedSubdivision?.districtId ??
+          linkedSubdivision?.district?.id
+        )
+    );
+
   const filteredUsers = users.filter((u) => {
     const query = search.toLowerCase().trim();
 
     if (!query) return true;
 
-    const linkedDistrict = districts.find(
-      (district) =>
-        Number(district.id) === Number(u.district_id)
-    );
-
-    const linkedSubdivision = subdivisions.find(
-      (subdivision) =>
-        Number(subdivision.id) === Number(u.subdivision_id)
-    );
-
-    const linkedBlock = blocks.find(
-      (block) =>
-        Number(block.id) ===
-        Number(u.block_id ?? u.linked_id)
+    const linkedBlock = getLinkedBlock(u);
+    const linkedSubdivision = getLinkedSubdivision(u, linkedBlock);
+    const linkedDistrict = getLinkedDistrict(
+      u,
+      linkedBlock,
+      linkedSubdivision
     );
 
     const districtName =
       linkedDistrict?.name ||
       u.district_name ||
       u.district?.name ||
+      linkedBlock?.district?.name ||
+      linkedSubdivision?.district?.name ||
       "";
 
     const subdivisionName =
       linkedSubdivision?.name ||
       u.subdivision_name ||
       u.subdivision?.name ||
+      linkedBlock?.subdivision?.name ||
       "";
 
     const blockName =
       linkedBlock?.name ||
+      u.linked_entity?.name ||
       u.block_name ||
       u.linked_name ||
       "";
@@ -502,11 +575,10 @@ function Block() {
 
         {/* Create Form */}
         <div
-          className={`grid transition-all duration-300 ease-in-out ${
-            showForm
+          className={`grid transition-all duration-300 ease-in-out ${showForm
               ? "mb-6 grid-rows-[1fr] opacity-100"
               : "grid-rows-[0fr] opacity-0 pointer-events-none"
-          }`}
+            }`}
         >
           <div className="overflow-hidden">
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -604,16 +676,18 @@ function Block() {
                       name="subdivision_id"
                       value={form.subdivision_id}
                       onChange={handleChange}
-                      disabled={subdivisionsLoading}
+                      disabled={!form.district_id || subdivisionsLoading}
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-100"
                     >
                       <option value="">
-                        {subdivisionsLoading
-                          ? "Loading subdivisions..."
-                          : "Select Subdivision"}
+                        {!form.district_id
+                          ? "Select district first"
+                          : subdivisionsLoading
+                            ? "Loading subdivisions..."
+                            : "Select Subdivision"}
                       </option>
 
-                      {subdivisions.map((subdivision) => (
+                      {filteredSubdivisions.map((subdivision) => (
                         <option
                           key={subdivision.id}
                           value={subdivision.id}
@@ -634,16 +708,18 @@ function Block() {
                       name="block_id"
                       value={form.block_id}
                       onChange={handleChange}
-                      disabled={blocksLoading}
+                      disabled={!form.subdivision_id || blocksLoading}
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-100"
                     >
                       <option value="">
-                        {blocksLoading
-                          ? "Loading blocks..."
-                          : "Select Block"}
+                        {!form.subdivision_id
+                          ? "Select subdivision first"
+                          : blocksLoading
+                            ? "Loading blocks..."
+                            : "Select Block"}
                       </option>
 
-                      {blocks.map((block) => (
+                      {filteredBlocks.map((block) => (
                         <option
                           key={block.id}
                           value={block.id}
@@ -824,23 +900,15 @@ function Block() {
 
                 <tbody className="divide-y divide-slate-100">
                   {filteredUsers.map((u) => {
-                    const linkedDistrict = districts.find(
-                      (district) =>
-                        Number(district.id) ===
-                        Number(u.district_id)
+                    const linkedBlock = getLinkedBlock(u);
+                    const linkedSubdivision = getLinkedSubdivision(
+                      u,
+                      linkedBlock
                     );
-
-                    const linkedSubdivision =
-                      subdivisions.find(
-                        (subdivision) =>
-                          Number(subdivision.id) ===
-                          Number(u.subdivision_id)
-                      );
-
-                    const linkedBlock = blocks.find(
-                      (block) =>
-                        Number(block.id) ===
-                        Number(u.block_id ?? u.linked_id)
+                    const linkedDistrict = getLinkedDistrict(
+                      u,
+                      linkedBlock,
+                      linkedSubdivision
                     );
 
                     return (
@@ -933,6 +1001,8 @@ function Block() {
                             linkedDistrict?.name ||
                             u.district_name ||
                             u.district?.name ||
+                            linkedBlock?.district?.name ||
+                            linkedSubdivision?.district?.name ||
                             "—"
                           )}
                         </td>
@@ -969,6 +1039,7 @@ function Block() {
                             linkedSubdivision?.name ||
                             u.subdivision_name ||
                             u.subdivision?.name ||
+                            linkedBlock?.subdivision?.name ||
                             "—"
                           )}
                         </td>
@@ -1001,6 +1072,7 @@ function Block() {
                             </select>
                           ) : (
                             linkedBlock?.name ||
+                            u.linked_entity?.name ||
                             u.block_name ||
                             u.linked_name ||
                             "—"
@@ -1010,11 +1082,10 @@ function Block() {
                         {/* Status */}
                         <td className="px-5 py-3">
                           <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
-                              u.status === "active"
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${u.status === "active"
                                 ? "bg-green-100 text-green-700"
                                 : "bg-slate-100 text-slate-500"
-                            }`}
+                              }`}
                           >
                             {u.status || "active"}
                           </span>
