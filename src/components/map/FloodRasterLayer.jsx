@@ -24,7 +24,7 @@ export default function FloodRasterLayer() {
 
                 const georaster = await parseGeoraster(arrayBuffer);
 
-                console.log("GeoRaster:", georaster);
+                // console.log("GeoRaster:", georaster);
 
                 rasterLayer = new GeoRasterLayer({
                     georaster,

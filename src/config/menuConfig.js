@@ -92,7 +92,7 @@ const commonMenus = [
     icon: Package,
     children: [
       {
-        label: "Stock Overview",
+        label: "Equipment Inventory",
         icon: Package,
         path: "/inventory/overview",
       },
