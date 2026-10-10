@@ -366,12 +366,92 @@ const userMenus = {
   block: null,
 };
 
+const operationalMenus = [
+  {
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    path: "/dashboard",
+  },
+  {
+    label: "Alerts",
+    icon: BellRing,
+    children: [
+      {
+        label: "Pre-Alerts",
+        icon: Radio,
+        path: "/alerts/pre-alerts",
+      },
+      {
+        label: "Post-Alerts",
+        icon: FileBarChart,
+        path: "/alerts/post-alerts",
+      },
+    ],
+  },
+  {
+    label: "Incident",
+    icon: Siren,
+    path: "/incident",
+  },
+  {
+    label: "Task",
+    icon: ClipboardCheck,
+    path: "/task",
+  },
+  {
+    label: "Training",
+    icon: GraduationCap,
+    path: "/training",
+  },
+  {
+    label: "SOS Emergency",
+    icon: Siren,
+    path: "/emergency",
+  },
+];
+
 const taskOnlyRoles = new Set(["volunteer", "ngo", "ngo_contact"]);
 
+export const getMenuForUser = (user) => {
+  if (!user) {
+    return [
+      {
+        label: "Task",
+        icon: ClipboardCheck,
+        path: "/task",
+      },
+    ];
+  }
 
-export const getMenuForRole = (role) => {
-  if (taskOnlyRoles.has(role)) {
-    return commonMenus.filter((menu) => menu.path === "/task");
+  const role =
+    user.role == null
+      ? null
+      : String(user.role).trim().toLowerCase();
+
+  const userType =
+    user.user_type == null
+      ? null
+      : String(user.user_type).trim().toLowerCase();
+
+  // Volunteers and NGO contact persons have operational access.
+  if (
+    role === null &&
+    ["volunteers", "ngo_contact_person"].includes(userType)
+  ) {
+    return operationalMenus;
+  }
+
+  // Unknown or unsupported roles must not receive staff menus.
+  const supportedRoles = [
+    "super_admin",
+    "admin",
+    "district",
+    "subdivision",
+    "block",
+  ];
+
+  if (!supportedRoles.includes(role)) {
+    return [];
   }
 
   const menus = [...commonMenus];
@@ -379,15 +459,42 @@ export const getMenuForRole = (role) => {
   const locationMenu = locationMenus[role];
   const userMenu = userMenus[role];
 
-  // Add Location Management first
   if (locationMenu) {
     menus.splice(1, 0, locationMenu);
   }
 
-  // Add Users immediately after Location Management
   if (userMenu) {
-    menus.splice(2, 0, userMenu);
+    menus.splice(locationMenu ? 2 : 1, 0, userMenu);
   }
 
   return menus;
 };
+
+export const getMenuForRole = (role) => {
+  return getMenuForUser(
+    role == null ? null : { role, user_type: "staff" }
+  );
+};
+
+// export const getMenuForRole = (role) => {
+//   if (taskOnlyRoles.has(role)) {
+//     return commonMenus.filter((menu) => menu.path === "/task");
+//   }
+
+//   const menus = [...commonMenus];
+
+//   const locationMenu = locationMenus[role];
+//   const userMenu = userMenus[role];
+
+//   // Add Location Management first
+//   if (locationMenu) {
+//     menus.splice(1, 0, locationMenu);
+//   }
+
+//   // Add Users immediately after Location Management
+//   if (userMenu) {
+//     menus.splice(2, 0, userMenu);
+//   }
+
+//   return menus;
+// };

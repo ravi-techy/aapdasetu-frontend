@@ -1,7 +1,12 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
 	MapContainer,
+	useMap,
+	useMapEvents,
 } from "react-leaflet";
+import Select from "react-select";
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import { point } from "@turf/helpers";
 
 import "leaflet/dist/leaflet.css";
 
@@ -11,6 +16,7 @@ import {
 	deleteDistrict,
 	listDistricts,
 	updateDistrict,
+	fetchWestBengalDistricts,
 } from "../../services";
 
 import LocationMarker from "../../components/map/LocationMarker";
@@ -22,6 +28,32 @@ import {
 	Check,
 	X,
 } from "lucide-react";
+
+function MapInteractionListener({ onMapInteraction }) {
+	useMapEvents({
+		click: onMapInteraction,
+		dragstart: onMapInteraction,
+		zoomstart: onMapInteraction,
+	});
+
+	return null;
+}
+
+function MapPositionUpdater({ position }) {
+	const map = useMap();
+
+	useEffect(() => {
+		if (position) {
+			map.flyTo(
+				[position.lat, position.lng],
+				Math.max(map.getZoom(), 8),
+				{ duration: 0.5 }
+			);
+		}
+	}, [map, position]);
+
+	return null;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -40,6 +72,13 @@ function DistrictLocation() {
 
 	const [position, setPosition] = useState(null);
 	const [selectedDistrict, setSelectedDistrict] = useState(null);
+	const [searchMode, setSearchMode] = useState("name");
+	const [mapDistrictOptions, setMapDistrictOptions] = useState([]);
+	const [districtNameOptions, setDistrictNameOptions] = useState([]);
+	const [loadingDistrictNameOptions, setLoadingDistrictNameOptions] =
+		useState(false);
+	const [districtNameError, setDistrictNameError] = useState("");
+	const [selectionError, setSelectionError] = useState("");
 
 	const [districts, setDistricts] = useState([]);
 	const [loadingDistricts, setLoadingDistricts] = useState(false);
@@ -85,35 +124,6 @@ function DistrictLocation() {
 
 	/*
 	|--------------------------------------------------------------------------
-	| Map Position
-	|--------------------------------------------------------------------------
-	|
-	| Used when LocationMarker changes the selected location.
-	|
-	*/
-
-	const handleMapPosition = (location) => {
-		if (!location) {
-			return;
-		}
-
-		setPosition(location);
-
-		setForm((previous) => ({
-			...previous,
-			latitude:
-				typeof location.lat === "number"
-					? location.lat.toFixed(6)
-					: "",
-			longitude:
-				typeof location.lng === "number"
-					? location.lng.toFixed(6)
-					: "",
-		}));
-	};
-
-	/*
-	|--------------------------------------------------------------------------
 	| Submit
 	|--------------------------------------------------------------------------
 	*/
@@ -128,7 +138,7 @@ function DistrictLocation() {
 		*/
 
 		if (!selectedDistrict) {
-			alert("Please select a district from the map.");
+			alert("Please select a district.");
 			return;
 		}
 
@@ -143,7 +153,7 @@ function DistrictLocation() {
 		}
 
 		if (!form.latitude || !form.longitude) {
-			alert("Please select a location on the map.");
+			alert("Please select a district to generate coordinates.");
 			return;
 		}
 
@@ -211,6 +221,8 @@ function DistrictLocation() {
 
 		setPosition(null);
 		setSelectedDistrict(null);
+		setSearchMode("name");
+		setSelectionError("");
 	};
 
 	/*
@@ -258,6 +270,52 @@ function DistrictLocation() {
 		loadDistricts();
 	}, []);
 
+	useEffect(() => {
+		const loadDistrictNameOptions = async () => {
+			try {
+				setLoadingDistrictNameOptions(true);
+				setDistrictNameError("");
+
+				const entities = await fetchWestBengalDistricts();
+				const options = entities
+					.filter(
+						(entity) =>
+							entity?.id &&
+							typeof entity.name_en === "string" &&
+							entity.name_en.trim() &&
+							Number.isFinite(Number(entity.lat)) &&
+							Number.isFinite(Number(entity.lon))
+					)
+					.map((entity) => ({
+						value: entity.id,
+						label: entity.name_en.trim(),
+						id: entity.id,
+						name: entity.name_en.trim(),
+						latitude: Number(entity.lat),
+						longitude: Number(entity.lon),
+					}));
+
+				if (!options.length) {
+					throw new Error(
+						"No districts with valid coordinates were returned."
+					);
+				}
+
+				setDistrictNameOptions(options);
+			} catch (error) {
+				console.error("District name options error:", error);
+				setDistrictNameError(
+					error?.message ||
+					"Unable to load districts for name search."
+				);
+			} finally {
+				setLoadingDistrictNameOptions(false);
+			}
+		};
+
+		loadDistrictNameOptions();
+	}, []);
+
 	/*
 	|--------------------------------------------------------------------------
 	| District Select
@@ -268,80 +326,87 @@ function DistrictLocation() {
 	|
 	*/
 
-	const handleDistrictSelect = (district) => {
+	const handleDistrictsLoad = useCallback((options) => {
+		setMapDistrictOptions(options);
+	}, []);
+
+	const handleMapInteraction = useCallback((event) => {
+		if (event?.originalEvent) {
+			setSearchMode("map");
+		}
+	}, []);
+
+	const handleDistrictSelect = (district, source = "map") => {
 		if (!district) {
 			return;
 		}
 
-		console.log(
-			"Selected district:",
-			district
-		);
-
-		setSelectedDistrict(district);
-
-		/*
-		|--------------------------------------------------------------------------
-		| Get coordinates
-		|--------------------------------------------------------------------------
-		*/
-
-		const latitude = Number(
-			district.latitude
-		);
-
-		const longitude = Number(
-			district.longitude
-		);
-
-		/*
-		|--------------------------------------------------------------------------
-		| Set marker
-		|--------------------------------------------------------------------------
-		*/
-
-		if (
-			!Number.isNaN(latitude) &&
-			!Number.isNaN(longitude)
-		) {
-			setPosition({
-				lat: latitude,
-				lng: longitude,
-			});
+		if (source === "map") {
+			setSearchMode("map");
 		}
 
-		/*
-		|--------------------------------------------------------------------------
-		| Update form
-		|--------------------------------------------------------------------------
-		*/
+		setSelectionError("");
 
+		const latitude = Number(district.latitude);
+		const longitude = Number(district.longitude);
+
+		if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+			setSelectionError(
+				"Coordinates are unavailable for the selected district."
+			);
+			return;
+		}
+
+		const selectedPosition = { lat: latitude, lng: longitude };
+		const mappedDistrict = district.feature
+			? district
+			: mapDistrictOptions.find(
+				(option) =>
+					option.feature &&
+					booleanPointInPolygon(
+						point([longitude, latitude]),
+						option.feature
+					)
+			);
+		const selected = {
+			...district,
+			...(mappedDistrict
+				? {
+					dist_lgd: mappedDistrict.dist_lgd,
+					feature: mappedDistrict.feature,
+					properties: mappedDistrict.properties,
+				}
+				: {}),
+			latitude,
+			longitude,
+		};
+
+		setSelectedDistrict(selected);
+		setPosition(selectedPosition);
 		setForm((previous) => ({
 			...previous,
-
-			/*
-			 * District name comes from map.
-			 */
-			name:
-				district.name ||
-				district.dtname ||
-				"",
-
+			name: district.name || district.dtname || "",
 			address: "",
-
-			/*
-			 * Coordinates come from map.
-			 */
-			latitude:
-				!Number.isNaN(latitude)
-					? latitude.toFixed(6)
-					: "",
-
-			longitude:
-				!Number.isNaN(longitude)
-					? longitude.toFixed(6)
-					: "",
+			latitude: latitude.toFixed(6),
+			longitude: longitude.toFixed(6),
 		}));
+	};
+
+	const handleDistrictSearchChange = (option) => {
+		if (!option) {
+			setSelectedDistrict(null);
+			setPosition(null);
+			setSelectionError("");
+			setForm((previous) => ({
+				...previous,
+				name: "",
+				latitude: "",
+				longitude: "",
+			}));
+			return;
+		}
+
+		handleDistrictSelect(option, "name");
 	};
 
 	/*
@@ -624,6 +689,35 @@ function DistrictLocation() {
 						className="space-y-5"
 					>
 
+						<fieldset>
+							<legend className="mb-2 block text-sm font-medium text-gray-700">
+								Choose district using
+							</legend>
+							<div className="flex flex-wrap gap-5">
+								<label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+									<input
+										type="radio"
+										name="district-search-mode"
+										value="name"
+										checked={searchMode === "name"}
+										onChange={() => setSearchMode("name")}
+										className="accent-blue-600"
+									/>
+									Search by name
+								</label>
+								<label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+									<input
+										type="radio"
+										name="district-search-mode"
+										value="map"
+										checked={searchMode === "map"}
+										onChange={() => setSearchMode("map")}
+										className="accent-blue-600"
+									/>
+									Search by map
+								</label>
+							</div>
+						</fieldset>
 
 						{/* =================================================
 						    District Name
@@ -631,23 +725,63 @@ function DistrictLocation() {
 
 						<div>
 
-							<label className="mb-2 block text-sm font-medium text-gray-700">
+							<label
+								htmlFor="district-name"
+								className="mb-2 block text-sm font-medium text-gray-700"
+							>
 								District Name
 							</label>
 
-							<input
-								type="text"
-								name="name"
-								value={form.name}
-								readOnly
-								required
-								placeholder="Select district from map"
-								className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-100 px-3 py-2.5 text-sm text-gray-600 outline-none"
-							/>
+							{searchMode === "name" ? (
+								<Select
+									inputId="district-name"
+									name="district-name"
+									options={districtNameOptions}
+									value={
+										districtNameOptions.find(
+											(option) =>
+												option.id === selectedDistrict?.id
+										) || null
+									}
+									onChange={handleDistrictSearchChange}
+									isClearable
+									isSearchable
+									isLoading={loadingDistrictNameOptions}
+									placeholder="Search or select a district..."
+									noOptionsMessage={() =>
+										districtNameError || "No districts found"
+									}
+									classNamePrefix="district-select"
+									aria-label="Search district by name"
+								/>
+							) : (
+								<div
+									className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-700"
+									aria-live="polite"
+								>
+									{form.name || "Select a district on the map"}
+								</div>
+							)}
 
-							{/* <p className="mt-1.5 text-xs text-gray-500">
-								District name is automatically selected from the map.
-							</p> */}
+							{searchMode === "name" && districtNameError && (
+								<p className="mt-1.5 text-sm text-red-600" role="alert">
+									{districtNameError} You can still use search by map.
+								</p>
+							)}
+
+							{selectionError && (
+								<p className="mt-1.5 text-sm text-red-600" role="alert">
+									{selectionError}
+								</p>
+							)}
+
+							{searchMode === "name" && !districtNameError && (
+								<p className="mt-1.5 text-xs text-gray-500">
+									{districtNameOptions.length
+										? `Name search uses API coordinates for ${districtNameOptions.length} districts. Use the map to select additional districts.`
+										: "Loading district names and coordinates..."}
+								</p>
+							)}
 
 						</div>
 
@@ -797,7 +931,7 @@ function DistrictLocation() {
 
 									{selectedDistrict
 										? `Selected district: ${selectedDistrict.name}`
-										: "Select a district from the map."
+										: "Search for a district by name or select one on the map."
 									}
 
 								</p>
@@ -827,13 +961,15 @@ function DistrictLocation() {
 							className="h-full w-full"
 						>
 
+							<MapInteractionListener
+								onMapInteraction={handleMapInteraction}
+							/>
+							<MapPositionUpdater position={position} />
+
 							<LocationMarker
 								position={position}
-								setPosition={
-									handleMapPosition
-								}
-								selectedDistrict={
-									selectedDistrict
+								districtName={
+									selectedDistrict?.name
 								}
 							/>
 
@@ -843,6 +979,9 @@ function DistrictLocation() {
 								}
 								onDistrictSelect={
 									handleDistrictSelect
+								}
+								onDistrictsLoad={
+									handleDistrictsLoad
 								}
 							/>
 

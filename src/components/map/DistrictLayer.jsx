@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { GeoJSON } from "react-leaflet";
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import { point } from "@turf/helpers";
 
 const DISTRICT_COLORS = [
   "#FDE68A",
@@ -50,15 +52,21 @@ const getDistrictColor = (districtLgd) => {
 export default function DistrictLayer({
   selectedDistrict,
   onDistrictSelect,
+  onDistrictsLoad,
   databaseDistricts = [],
   requireDatabaseDistrict = false,
 }) {
   const [geoData, setGeoData] = useState(null);
   const databaseDistrictsRef = useRef(databaseDistricts);
+  const onDistrictsLoadRef = useRef(onDistrictsLoad);
 
   useLayoutEffect(() => {
     databaseDistrictsRef.current = databaseDistricts;
   }, [databaseDistricts]);
+
+  useLayoutEffect(() => {
+    onDistrictsLoadRef.current = onDistrictsLoad;
+  }, [onDistrictsLoad]);
 
   useEffect(() => {
     const loadDistricts = async () => {
@@ -71,6 +79,29 @@ export default function DistrictLayer({
 
         const data = await response.json();
         setGeoData(data);
+        onDistrictsLoadRef.current?.(
+          (data.features || [])
+            .map((feature) => {
+              const properties = feature?.properties || {};
+              const name =
+                properties.dtname ||
+                properties.district_name ||
+                properties.district ||
+                properties.name ||
+                "";
+
+              return {
+                value: properties.dist_lgd ?? name,
+                label: name,
+                id: null,
+                dist_lgd: properties.dist_lgd,
+                name,
+                properties,
+                feature,
+              };
+            })
+            .filter((district) => district.name)
+        );
       } catch (error) {
         console.error("District GeoJSON error:", error);
       }
@@ -89,9 +120,22 @@ export default function DistrictLayer({
     const districtLgd = properties.dist_lgd;
     const color = getDistrictColor(districtLgd);
 
-    const isSelected =
+    const selectedById =
       selectedDistrict &&
+      selectedDistrict.dist_lgd != null &&
       String(selectedDistrict.dist_lgd) === String(districtLgd);
+    const selectedByReferencePoint =
+      selectedDistrict &&
+      Number.isFinite(Number(selectedDistrict.latitude)) &&
+      Number.isFinite(Number(selectedDistrict.longitude)) &&
+      booleanPointInPolygon(
+        point([
+          Number(selectedDistrict.longitude),
+          Number(selectedDistrict.latitude),
+        ]),
+        feature
+      );
+    const isSelected = selectedById || selectedByReferencePoint;
 
     return {
       color: isSelected ? "#1d4ed8" : "#739cb6",

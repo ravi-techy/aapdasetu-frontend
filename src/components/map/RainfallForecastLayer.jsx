@@ -136,85 +136,193 @@ export default function RainfallForecastLayer({
     onForecastStatus,
   ]);
 
+
   useEffect(() => {
-    if (!data?.features?.length) return undefined;
+    if (!data?.features?.length || mapMode !== "rainfall") {
+      return undefined;
+    }
 
     const controller = new AbortController();
+    const BATCH_SIZE = 5;
+    const MAX_ATTEMPTS = 3;
+
+    const wait = (ms) =>
+      new Promise((resolve, reject) => {
+        if (controller.signal.aborted) {
+          reject(new DOMException("Request aborted", "AbortError"));
+          return;
+        }
+
+        const timeoutId = setTimeout(() => {
+          controller.signal.removeEventListener("abort", onAbort);
+          resolve();
+        }, ms);
+
+        const onAbort = () => {
+          clearTimeout(timeoutId);
+          reject(new DOMException("Request aborted", "AbortError"));
+        };
+
+        controller.signal.addEventListener("abort", onAbort, {
+          once: true,
+        });
+      });
+
+    async function fetchBatch(locations) {
+      const query = new URLSearchParams({
+        latitude: locations
+          .map(({ latitude }) => latitude.toFixed(4))
+          .join(","),
+        longitude: locations
+          .map(({ longitude }) => longitude.toFixed(4))
+          .join(","),
+        hourly: "precipitation",
+        forecast_hours: String(FORECAST_HOURS),
+        timezone: "GMT",
+      });
+
+      let lastError;
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        try {
+          const response = await fetch(`${FORECAST_URL}?${query}`, {
+            signal: controller.signal,
+          });
+
+          if (!response.ok) {
+            const error = new Error(
+              `Open-Meteo returned HTTP ${response.status}.`
+            );
+
+            // Retry temporary server errors and rate limits only.
+            if (
+              response.status !== 429 &&
+              response.status < 500
+            ) {
+              throw error;
+            }
+
+            lastError = error;
+          } else {
+            const results = await response.json();
+
+            // Multiple coordinates should return one result per location.
+            const normalizedResults = Array.isArray(results)
+              ? results
+              : [results];
+
+            if (normalizedResults.length !== locations.length) {
+              throw new Error(
+                "Open-Meteo returned an unexpected number of locations."
+              );
+            }
+
+            return normalizedResults;
+          }
+        } catch (error) {
+          if (error.name === "AbortError") throw error;
+
+          // Do not retry ordinary client errors or malformed responses.
+          if (
+            error.message?.includes("HTTP 4") &&
+            !error.message.includes("HTTP 429")
+          ) {
+            throw error;
+          }
+
+          lastError = error;
+        }
+
+        if (attempt < MAX_ATTEMPTS) {
+          // Backoff: 1 second, then 2 seconds.
+          await wait(1000 * 2 ** (attempt - 1));
+        }
+      }
+
+      throw lastError || new Error("Rainfall forecast request failed.");
+    }
 
     async function loadForecast() {
       setForecastLoading(true);
       setForecastError("");
-      setUpdatedAt("");
 
       try {
         const locations = data.features.map((feature) => ({
           id: feature?.properties?.dist_lgd,
+          name: getDistrictName(feature),
           ...getFeatureCentroid(feature),
         }));
-        const query = new URLSearchParams({
-          latitude: locations.map(({ latitude }) => latitude.toFixed(4)).join(","),
-          longitude: locations.map(({ longitude }) => longitude.toFixed(4)).join(","),
-          hourly: "precipitation",
-          forecast_hours: String(FORECAST_HOURS),
-          timezone: "GMT",
-        });
-        const response = await fetch(`${FORECAST_URL}?${query}`, {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Open-Meteo returned HTTP ${response.status}.`);
-        }
-
-        const results = await response.json();
-        if (!Array.isArray(results) || results.length !== locations.length) {
-          throw new Error("The rainfall forecast response did not include every district.");
-        }
 
         const nextRainfall = {};
-        results.forEach((result, index) => {
-          const hourly = result?.hourly?.precipitation;
-          if (
-            !Array.isArray(hourly) ||
-            hourly.length !== FORECAST_HOURS ||
-            hourly.some((value) => value == null || !Number.isFinite(Number(value)))
-          ) {
-            throw new Error(
-              `The rainfall forecast for ${getDistrictName(data.features[index])} is incomplete.`
+
+        // Request five districts at a time instead of all 23 together.
+        for (
+          let start = 0;
+          start < locations.length;
+          start += BATCH_SIZE
+        ) {
+          if (controller.signal.aborted) return;
+
+          const batch = locations.slice(start, start + BATCH_SIZE);
+          const results = await fetchBatch(batch);
+
+          results.forEach((result, index) => {
+            const location = batch[index];
+            const hourly = result?.hourly?.precipitation;
+
+            if (
+              !Array.isArray(hourly) ||
+              hourly.length !== FORECAST_HOURS ||
+              hourly.some(
+                (value) =>
+                  value == null || !Number.isFinite(Number(value))
+              )
+            ) {
+              throw new Error(
+                `The rainfall forecast for ${location.name} is incomplete.`
+              );
+            }
+
+            if (location.id == null) {
+              throw new Error(
+                `${location.name} is missing its LGD identifier.`
+              );
+            }
+
+            nextRainfall[String(location.id)] = hourly.reduce(
+              (total, value) => total + Number(value),
+              0
             );
-          }
-
-          const districtId = locations[index].id;
-          if (districtId == null) {
-            throw new Error(`A district is missing its LGD identifier.`);
-          }
-
-          nextRainfall[String(districtId)] = hourly.reduce(
-            (total, value) => total + Number(value),
-            0
-          );
-        });
+          });
+        }
 
         if (!controller.signal.aborted) {
           setRainfallByDistrict(nextRainfall);
           setUpdatedAt(new Date().toISOString());
+          setForecastError("");
         }
       } catch (forecastLoadError) {
         if (forecastLoadError.name === "AbortError") return;
+
         console.error("Rainfall forecast error:", forecastLoadError);
+
         if (!controller.signal.aborted) {
           setForecastError(
-            "Unable to load the 24-hour rainfall forecast. Please try again later."
+            "Unable to refresh the 24-hour rainfall forecast. " +
+            "Showing the last successful forecast if available."
           );
         }
       } finally {
-        if (!controller.signal.aborted) setForecastLoading(false);
+        if (!controller.signal.aborted) {
+          setForecastLoading(false);
+        }
       }
     }
 
     loadForecast();
+
     return () => controller.abort();
-  }, [data]);
+  }, [data, mapMode]);
 
   const handleEachDistrict = (feature, layer) => {
     const name = getDistrictName(feature);
