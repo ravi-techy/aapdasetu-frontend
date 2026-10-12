@@ -1,4 +1,3 @@
-import React from 'react'
 import {
   LayoutDashboard,
   Users,
@@ -22,13 +21,15 @@ import {
   BellRing,
   Radio,
   ClipboardCheck,
-  Package,
   Wrench,
   GraduationCap,
   FileBarChart,
-  Users2,
+  Boxes,
+  BarChart3,
+  PackageCheck,
+  ClipboardMinus,
 } from "lucide-react";
-
+import { isOperationalUser } from "../utils/roles";
 
 const commonMenus = [
   {
@@ -89,15 +90,15 @@ const commonMenus = [
 
   {
     label: "Inventory",
-    icon: Package,
+    icon: Boxes,
     children: [
       {
         label: "Equipment Inventory",
-        icon: Package,
+        icon: BarChart3,
         path: "/inventory/overview",
       },
       {
-        label: "Equipment",
+        label: "Equipment Category",
         icon: Wrench,
         path: "/inventory/equipment",
       },
@@ -112,20 +113,30 @@ const commonMenus = [
         path: "/inventory/issue",
       },
       {
+        label: "Return Stock",
+        icon: PackageCheck,
+        path: "/inventory/return",
+      },
+      {
         label: "Stock History",
         icon: History,
-        path: "/inventory/history",
+        children: [
+          {
+            label: "Stock Issue History",
+            icon: ClipboardMinus,
+            path: "/inventory/history/issue",
+          },
+          {
+            label: "Stock Return History",
+            icon: ClipboardCheck,
+            path: "/inventory/history/return",
+          },
+        ],
       },
-
     ],
   },
 
 
-  {
-    label: "Incident",
-    icon: Siren,
-    path: "/incident",
-  },
   {
     label: "Alerts",
     icon: BellRing,
@@ -133,23 +144,32 @@ const commonMenus = [
       {
         label: "Pre-Alerts",
         icon: Radio,
-        path: "/alerts/pre-alerts",
+        path: "/pre-alerts",
       },
       {
         label: "Post-Alerts",
         icon: FileBarChart,
-        path: "/alerts/post-alerts",
+        path: "/post-alerts",
+      },
+
+
+      {
+        label: "Incident",
+        icon: Siren,
+        path: "/incident",
+      },
+
+      {
+        label: "Task",
+        icon: ClipboardCheck,
+        path: "/task",
       },
 
 
     ],
   },
 
-  {
-    label: "Task",
-    icon: ClipboardCheck,
-    path: "/task",
-  },
+
   // // {
   //   label: "Resources",
   //   icon: Package,
@@ -179,7 +199,7 @@ const commonMenus = [
   //   ],
   // },
   {
-    label: "Reports",
+    label: "MIS Reports",
     icon: FileBarChart,
     path: "/reports",
   },
@@ -241,7 +261,7 @@ const userMenus = {
 
   super_admin: {
     label: "Users",
-    icon: Users2,
+    icon: Users,
     children: [
       {
         label: "Admin",
@@ -281,7 +301,7 @@ const userMenus = {
 
   admin: {
     label: "Users",
-    icon: Users2,
+    icon: MapPinned,
     children: [
       {
         label: "District",
@@ -314,7 +334,7 @@ const userMenus = {
 
   district: {
     label: "Users",
-    icon: Users2,
+    icon: MapPinned,
     children: [
       {
         label: "Subdivision",
@@ -342,7 +362,7 @@ const userMenus = {
 
   subdivision: {
     label: "Users",
-    icon: Users2,
+    icon: MapPinned,
     children: [
       {
         label: "Block",
@@ -366,83 +386,47 @@ const userMenus = {
   block: null,
 };
 
-const operationalMenus = [
-  {
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    path: "/dashboard",
-  },
-  {
-    label: "Alerts",
-    icon: BellRing,
-    children: [
-      {
-        label: "Pre-Alerts",
-        icon: Radio,
-        path: "/alerts/pre-alerts",
-      },
-      {
-        label: "Post-Alerts",
-        icon: FileBarChart,
-        path: "/alerts/post-alerts",
-      },
-    ],
-  },
-  {
-    label: "Incident",
-    icon: Siren,
-    path: "/incident",
-  },
-  {
-    label: "Task",
-    icon: ClipboardCheck,
-    path: "/task",
-  },
-  {
-    label: "Training",
-    icon: GraduationCap,
-    path: "/training",
-  },
-  {
+const getOperationalMenus = () => {
+  const alertsMenu = commonMenus.find(
+    (menu) => menu.label === "Alerts"
+  );
+
+  const allowedAlertPaths = [
+    "/pre-alerts",
+    "/post-alerts",
+    "/incident",
+    "/task",
+  ];
+
+  const sosMenu = {
     label: "SOS Emergency",
     icon: Siren,
     path: "/emergency",
-  },
-];
+  };
 
-const taskOnlyRoles = new Set(["volunteer", "ngo", "ngo_contact"]);
+  return [
+    ...(alertsMenu?.children || []).filter((item) =>
+      allowedAlertPaths.includes(item.path)
+    ),
+    sosMenu,
+  ];
+};
 
 export const getMenuForUser = (user) => {
-  if (!user) {
-    return [
-      {
-        label: "Task",
-        icon: ClipboardCheck,
-        path: "/task",
-      },
-    ];
-  }
+  if (!user) return [];
 
   const role =
     user.role == null
       ? null
       : String(user.role).trim().toLowerCase();
 
-  const userType =
-    user.user_type == null
-      ? null
-      : String(user.user_type).trim().toLowerCase();
-
-  // Volunteers and NGO contact persons have operational access.
-  if (
-    role === null &&
-    ["volunteers", "ngo_contact_person"].includes(userType)
-  ) {
-    return operationalMenus;
+  // Volunteers and NGO contact persons
+  if (isOperationalUser(user)) {
+    return getOperationalMenus();
   }
 
-  // Unknown or unsupported roles must not receive staff menus.
-  const supportedRoles = [
+  // Only recognized staff roles get the staff menu
+  const staffRoles = [
     "super_admin",
     "admin",
     "district",
@@ -450,7 +434,7 @@ export const getMenuForUser = (user) => {
     "block",
   ];
 
-  if (!supportedRoles.includes(role)) {
+  if (!role || !staffRoles.includes(role)) {
     return [];
   }
 
@@ -470,31 +454,9 @@ export const getMenuForUser = (user) => {
   return menus;
 };
 
+// Backward compatibility if another component still uses this function.
 export const getMenuForRole = (role) => {
-  return getMenuForUser(
-    role == null ? null : { role, user_type: "staff" }
-  );
+  if (!role) return [];
+
+  return getMenuForUser({ role, user_type: "staff" });
 };
-
-// export const getMenuForRole = (role) => {
-//   if (taskOnlyRoles.has(role)) {
-//     return commonMenus.filter((menu) => menu.path === "/task");
-//   }
-
-//   const menus = [...commonMenus];
-
-//   const locationMenu = locationMenus[role];
-//   const userMenu = userMenus[role];
-
-//   // Add Location Management first
-//   if (locationMenu) {
-//     menus.splice(1, 0, locationMenu);
-//   }
-
-//   // Add Users immediately after Location Management
-//   if (userMenu) {
-//     menus.splice(2, 0, userMenu);
-//   }
-
-//   return menus;
-// };

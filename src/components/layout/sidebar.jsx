@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { ChevronDown, LogOut, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getMenuForRole } from "../../config/menuConfig";
 import { useAuth } from "../../context/AuthContext";
+import { getMenuForUser } from "../../config/menuConfig";
 
 
 function Sidebar({
@@ -15,9 +15,9 @@ function Sidebar({
   const location = useLocation();
   const { user } = useAuth();
 
-  const role = user?.role || "admin";
+  // const role = user?.role || "admin";
 
-  const menuItems = getMenuForRole(role);
+  const menuItems = getMenuForUser(user);
 
   const [openMenus, setOpenMenus] = useState({});
 

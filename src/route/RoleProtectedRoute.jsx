@@ -1,23 +1,27 @@
 import React from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getUserRole, getUserType } from "../utils/roles";
 
-function RoleProtectedRoute({ allowedRoles = [] }) {
+function RoleProtectedRoute({
+  allowedRoles = [],
+  allowedUserTypes = [],
+  fallbackPath = "/task",
+}) {
   const { user } = useAuth();
-  const location = useLocation();
 
-  const role = user?.role?.toLowerCase()?.trim();
+  const role = getUserRole(user);
+  const userType = getUserType(user);
 
-  if (!role) {
-    return <Navigate to="/dashboard" replace />;
+  const roleAllowed =
+    role !== null && allowedRoles.includes(role);
+
+  const userTypeAllowed =
+    userType !== null && allowedUserTypes.includes(userType);
+
+  if (!roleAllowed && !userTypeAllowed) {
+    return <Navigate to={fallbackPath} replace />;
   }
-
-  if (!allowedRoles.includes(role)) {
-    console.log("❌ Access denied:", role);
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  console.log("✅ Access granted:", role);
 
   return <Outlet />;
 }

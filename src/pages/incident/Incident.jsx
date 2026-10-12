@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { listIncidents, createIncident, deleteIncident } from "../../services";
+import { listIncidents, getIncident, createIncident, deleteIncident } from "../../services";
 import { AlertTriangle, Plus, X, RefreshCw, Trash2 } from "lucide-react";
 
 const SEVERITY_STYLES = {
@@ -39,6 +39,7 @@ function Incident() {
 
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [showOverview, setShowOverview] = useState(false);
+  const [overviewLoading, setOverviewLoading] = useState(false);
 
   // ── fetch list ──────────────────────────────────────────────────────────────
   const fetchIncidents = useCallback(async () => {
@@ -46,6 +47,7 @@ function Incident() {
     setError("");
     try {
       const res = await listIncidents({ page: 1, per_page: 50 });
+      console.log(res?.data);
       setIncidents(res?.data?.incidents ?? res?.data ?? []);
     } catch (err) {
       setError(err.message || "Failed to load incidents");
@@ -105,9 +107,28 @@ function Incident() {
     }
   };
 
-  const handleIncidentClick = (incident) => {
+  const handleIncidentClick = async (incident) => {
     setSelectedIncident(incident);
     setShowOverview(true);
+    setOverviewLoading(true);
+    setError("");
+
+    try {
+      const res = await getIncident(incident.id);
+
+      // Adjust this extraction if your API uses a different response structure.
+      const incidentDetails =
+        res?.data?.incident ??
+        res?.data ??
+        res?.incident ??
+        res;
+
+      setSelectedIncident(incidentDetails);
+    } catch (err) {
+      setError(err.message || "Failed to load incident details");
+    } finally {
+      setOverviewLoading(false);
+    }
   };
 
   const closeOverview = () => {
@@ -367,92 +388,98 @@ function Incident() {
 
             {/* Modal Body */}
             <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-
-                {/* Incident No */}
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Incident No.
-                  </p>
-
-                  <p className="mt-1 text-sm font-semibold text-gray-800">
-                    {selectedIncident.incident_no || "—"}
-                  </p>
+              {overviewLoading ? (
+                <div className="flex items-center justify-center py-12 text-sm text-slate-500">
+                  Loading incident details...
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 
-                {/* Title */}
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Title
-                  </p>
+                  {/* Incident No */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Incident No.
+                    </p>
 
-                  <p className="mt-1 text-sm text-gray-800">
-                    {selectedIncident.title || "—"}
-                  </p>
-                </div>
-
-                {/* Incident Type */}
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Incident Type
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-800">
-                    {selectedIncident.incident_type || "—"}
-                  </p>
-                </div>
-
-                {/* Severity */}
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Severity
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-800">
-                    {selectedIncident.severity || "—"}
-                  </p>
-                </div>
-
-                {/* Reported At */}
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Reported At
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-800">
-                    {selectedIncident.reported_at
-                      ? new Date(selectedIncident.reported_at).toLocaleString()
-                      : "—"}
-                  </p>
-                </div>
-
-                {/* Created At */}
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Created At
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-800">
-                    {selectedIncident.created_at
-                      ? new Date(selectedIncident.created_at).toLocaleString()
-                      : "—"}
-                  </p>
-                </div>
-
-                {/* Description */}
-                <div className="sm:col-span-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Description
-                  </p>
-
-                  <div className="mt-2 rounded-lg bg-gray-50 p-4">
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">
-                      {selectedIncident.description || "No description available."}
+                    <p className="mt-1 text-sm font-semibold text-gray-800">
+                      {selectedIncident.incident_no || "—"}
                     </p>
                   </div>
-                </div>
 
-              </div>
+                  {/* Title */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Title
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-800">
+                      {selectedIncident.title || "—"}
+                    </p>
+                  </div>
+
+                  {/* Incident Type */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Incident Type
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-800">
+                      {selectedIncident.incident_type || "—"}
+                    </p>
+                  </div>
+
+                  {/* Severity */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Severity
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-800">
+                      {selectedIncident.severity || "—"}
+                    </p>
+                  </div>
+
+                  {/* Reported At */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Reported At
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-800">
+                      {selectedIncident.reported_at
+                        ? new Date(selectedIncident.reported_at).toLocaleString()
+                        : "—"}
+                    </p>
+                  </div>
+
+                  {/* Created At */}
+                  {/* <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Created At
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-800">
+                      {selectedIncident.created_at
+                        ? new Date(selectedIncident.created_at).toLocaleString()
+                        : "—"}
+                    </p>
+                  </div> */}
+
+                  {/* Description */}
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Description
+                    </p>
+
+                    <div className="mt-2 rounded-lg bg-gray-50 p-4">
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                        {selectedIncident.description || "No description available."}
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}

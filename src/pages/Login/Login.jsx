@@ -13,6 +13,7 @@ import {
   MapPinIcon,
   ClipboardList,
 } from "lucide-react";
+import { getUserRole, isOperationalUser } from "../../utils/roles";
 
 const features = [
   {
@@ -47,25 +48,29 @@ function Login() {
   const [formError, setFormError] = useState("");
 
   const handleLogin = async (e) => {
-  e.preventDefault();
-  setFormError("");
+    e.preventDefault();
+    setFormError("");
 
-  if (!userId || !password) {
-    setFormError("Please fill in all fields.");
-    return;
-  }
+    if (!userId || !password) {
+      setFormError("Please fill in all fields.");
+      return;
+    }
 
-  try {
-    const loggedInUser = await login(userId, password);
-    const taskOnlyRoles = ["volunteer", "ngo_contact", "ngo"];
-    const destination = taskOnlyRoles.includes(loggedInUser?.role)
-      ? "/task"
-      : "/dashboard";
-    navigate(destination, { replace: true });
-  } catch (err) {
-    setFormError(err?.message || "Invalid credentials. Please try again.");
-  }
-};
+    try {
+      const loggedInUser = await login(userId, password);
+
+      const role = getUserRole(loggedInUser);
+      if (isOperationalUser(loggedInUser)) {
+        navigate("/pre-alerts", { replace: true });
+      } else if (role) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/task", { replace: true });
+      }
+    } catch (err) {
+      setFormError(err?.message || "Invalid credentials. Please try again.");
+    }
+  };
 
 
   return (

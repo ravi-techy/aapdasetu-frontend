@@ -29,3 +29,6 @@ export * from "./stockIssueService";
 export * from "./stockHistoryService";
 export * from "./districtReferences";
 export * from "./sentinel2Service";
+export * from "./postAlertService";
+export * from "./returnHistoryService";
+export * from "./returnStockService";
