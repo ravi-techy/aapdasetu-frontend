@@ -329,11 +329,21 @@ export default function RainfallForecastLayer({
     layer.bindTooltip(name, { sticky: true });
     layer.on("click", (event) => {
       const districtId = feature?.properties?.dist_lgd;
+      const bounds = layer.getBounds();
+
       onDistrictSelect?.({
         name,
         dist_lgd: districtId,
         latitude: event.latlng.lat,
         longitude: event.latlng.lng,
+        bounds: bounds.isValid()
+          ? {
+            south: bounds.getSouth(),
+            west: bounds.getWest(),
+            north: bounds.getNorth(),
+            east: bounds.getEast(),
+          }
+          : null,
         precipitationMm:
           districtId == null
             ? undefined
@@ -364,30 +374,32 @@ export default function RainfallForecastLayer({
           eventHandlers={{ tileerror: handleHistoricalTileError }}
         />
       )}
-      <GeoJSON
-        data={data}
-        style={(feature) => {
-          const districtId = feature?.properties?.dist_lgd;
-          const isSelected =
-            selectedDistrict &&
-            String(selectedDistrict.dist_lgd) === String(districtId);
+      {mapMode !== "satellite-alerts" && (
+        <GeoJSON
+          data={data}
+          style={(feature) => {
+            const districtId = feature?.properties?.dist_lgd;
+            const isSelected =
+              selectedDistrict &&
+              String(selectedDistrict.dist_lgd) === String(districtId);
 
-          return {
-            color: isSelected ? "#1d4ed8" : "#334155",
-            weight: isSelected ? 2.5 : 1,
-            fillColor:
-              mapMode === "historical"
-                ? "#ffffff"
-                : getRainfallColor(
-                  districtId == null
-                    ? undefined
-                    : rainfallByDistrict[String(districtId)]
-                ),
-            fillOpacity: mapMode === "historical" ? 0 : 0.78,
-          };
-        }}
-        onEachFeature={handleEachDistrict}
-      />
+            return {
+              color: isSelected ? "#1d4ed8" : "#334155",
+              weight: isSelected ? 2.5 : 1,
+              fillColor:
+                mapMode === "historical"
+                  ? "#ffffff"
+                  : getRainfallColor(
+                    districtId == null
+                      ? undefined
+                      : rainfallByDistrict[String(districtId)]
+                  ),
+              fillOpacity: mapMode === "historical" ? 0 : 0.78,
+            };
+          }}
+          onEachFeature={handleEachDistrict}
+        />
+      )}
     </>
   );
 }

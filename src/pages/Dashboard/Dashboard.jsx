@@ -29,12 +29,12 @@ import {
   Legend,
   Cell,
 } from "recharts";
-import L from "leaflet";
 import { MapContainer } from "react-leaflet";
 import RainfallForecastLayer from "../../components/map/RainfallForecastLayer";
-import Sentinel2SatelliteLayer from "../../components/map/Sentinel2SatelliteLayer";
 import WestBengalBasemap from "../../components/map/WestBengalBasemap";
 import FitWestBengalBounds from "../../components/map/FitWestBengalBounds";
+import MapTilerSatelliteBasemap from "../../components/map/MapTilerSatelliteBasemap";
+import ImdAlertsLayer from "../../components/map/IMDAlertsLayer";
 
 const HISTORICAL_FLOOD_EVENTS = [
   { layer: "wb_020711_flood", date: "Jul 2, 2011" },
@@ -118,11 +118,18 @@ function Dashboard() {
   const [districtLayerError, setDistrictLayerError] = useState("");
   const [basemapError, setBasemapError] = useState("");
   const [historicalLayerError, setHistoricalLayerError] = useState("");
-  const [sentinel2Status, setSentinel2Status] = useState({
+
+  const [imdStatus, setImdStatus] = useState({
     loading: false,
     error: "",
-    config: null,
-  })
+    counts: null,
+    updatedAt: "",
+  });
+  // const [sentinel2Status, setSentinel2Status] = useState({
+  //   loading: false,
+  //   error: "",
+  //   config: null,
+  // })
   const [mapMode, setMapMode] = useState("rainfall");
   const [historicalEventLayer, setHistoricalEventLayer] = useState(
     HISTORICAL_FLOOD_EVENTS[0].layer
@@ -133,10 +140,10 @@ function Dashboard() {
     updatedAt: "",
     rainfallByDistrict: {},
   });
-  const [sentinel2Date, setSentinel2Date] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
-  const [sentinel2Opacity, setSentinel2Opacity] = useState(70);
+  // const [sentinel2Date, setSentinel2Date] = useState(
+  //   new Date().toISOString().slice(0, 10)
+  // );
+  // const [sentinel2Opacity, setSentinel2Opacity] = useState(70);
   const [inventoryChartData, setInventoryChartData] = useState([]);
   const [inventoryChartLoading, setInventoryChartLoading] = useState(true);
   const [inventoryChartError, setInventoryChartError] = useState("");
@@ -1099,9 +1106,9 @@ function Dashboard() {
             <h2 className="font-semibold text-slate-900">
               {mapMode === "rainfall"
                 ? "West Bengal Rainfall Forecast"
-                : mapMode === "sentinel2-satellite"
-                  ? "Sentinel-2 Satellite MNDWI Image"
-                  : "West Bengal Historical Flood Inundation"}
+                : mapMode === "historical"
+                  ? "West Bengal Historical Flood Inundation"
+                  : "West Bengal Satellite Basemap"}
             </h2>
             <div className="flex flex-col gap-3 sm:flex-row">
               <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -1111,13 +1118,16 @@ function Dashboard() {
                   onChange={(event) => {
                     setMapMode(event.target.value);
                     setHistoricalLayerError("");
-                    setSentinel2Status((status) => ({ ...status, error: "" }));
                   }}
                   className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
                 >
                   <option value="rainfall">Next 24-hour rainfall</option>
-                  <option value="historical">Historical inundation (Bhuvan)</option>
-                  <option value="sentinel2-satellite">Sentinel-2 Satellite (MNDWI)</option>
+                  <option value="historical">
+                    Historical inundation (Bhuvan)
+                  </option>
+                  <option value="satellite-alerts">
+                    Satellite
+                  </option>
                 </select>
               </label>
               {mapMode === "historical" && (
@@ -1136,50 +1146,6 @@ function Dashboard() {
                     ))}
                   </select>
                 </label>
-              )}
-              {mapMode === "sentinel2-satellite" && (
-                <>
-                  {/* <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                    Event date
-                    <input
-                      type="date"
-                      value={sentinel2Date}
-                      max={new Date().toISOString().slice(0, 10)}
-                      onChange={(event) => setSentinel2Date(event.target.value)}
-                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
-                    />
-                  </label> */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-slate-600">
-                    <span>
-                      Max cloud cover:{" "}
-                      {sentinel2Status.config
-                        ? `${sentinel2Status.config.maxCloudCover}%`
-                        : "Loading…"}
-                    </span>
-                    <span>Index: MNDWI</span>
-                    <span>
-                      Threshold:{" "}
-                      {sentinel2Status.config
-                        ? sentinel2Status.config.mndwiThreshold.toFixed(2)
-                        : "Loading…"}
-                    </span>
-                    <label className="flex items-center gap-2">
-                      Opacity
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={sentinel2Opacity}
-                        onChange={(event) =>
-                          setSentinel2Opacity(Number(event.target.value))
-                        }
-                        aria-label="Sentinel-2 overlay opacity"
-                        className="w-24 accent-orange-600"
-                      />
-                      <span className="w-9 text-right">{sentinel2Opacity}%</span>
-                    </label>
-                  </div>
-                </>
               )}
             </div>
           </div>
@@ -1215,15 +1181,24 @@ function Dashboard() {
                   onForecastStatus={setRainfallStatus}
                   onHistoricalLayerError={setHistoricalLayerError}
                 />
-                {mapMode === "sentinel2-satellite" && (
+                {/* {mapMode === "sentinel2-satellite" && (
                   <Sentinel2SatelliteLayer
                     date={sentinel2Date}
                     opacity={sentinel2Opacity}
                     selectedDistrict={selectedDistrict}
                     onStatus={setSentinel2Status}
                   />
+                )} */}
+                {mapMode === "satellite-alerts" ? (
+                  <>
+                    <MapTilerSatelliteBasemap
+                      onMapError={setBasemapError}
+                    />
+                    <ImdAlertsLayer onStatus={setImdStatus} />
+                  </>
+                ) : (
+                  <WestBengalBasemap onMapError={setBasemapError} />
                 )}
-                <WestBengalBasemap onMapError={setBasemapError} />
               </MapContainer>
             </div>
 
@@ -1239,19 +1214,20 @@ function Dashboard() {
                   <p className="text-sm font-semibold text-slate-800">
                     {mapMode === "rainfall"
                       ? "Next 24-hour rainfall"
-                      : mapMode === "sentinel2-satellite"
-                        ? "Sentinel-2 Satellite MNDWI"
-                        : "Historical flood inundation"}
+                      : mapMode === "historical"
+                        ? "Historical flood inundation"
+                        : "Satellite Basemap"}
                   </p>
+
                   <p className="mt-1 text-xs leading-5 text-slate-500">
                     {mapMode === "rainfall"
                       ? "Forecast precipitation by district, accumulated in millimetres."
-                      : mapMode === "sentinel2-satellite"
-                        ? `MNDWI candidate pixels for ${sentinel2Date}; this endpoint does not return natural-color satellite imagery.`
-                        : `Bhuvan satellite-derived inundation snapshot for ${HISTORICAL_FLOOD_EVENTS.find(
+                      : mapMode === "historical"
+                        ? `Bhuvan satellite-derived inundation snapshot for ${HISTORICAL_FLOOD_EVENTS.find(
                           ({ layer }) => layer === historicalEventLayer
                         )?.date
-                        }.`}
+                        }.`
+                        : ""}
                   </p>
                 </div>
 
@@ -1288,14 +1264,14 @@ function Dashboard() {
                 ) : (
                   <div className="mt-6 space-y-3 text-xs leading-5 text-slate-600">
                     <p>
-                      Orange pixels show MNDWI values above the configured
-                      threshold. These are water/inundation candidates, not
-                      confirmed flood water.
+                      The satellite imagery provides geographic context. IMD warning
+                      and cyclone overlays are shown when data is available.
                     </p>
-                    <div className="flex items-center gap-3">
-                      <span className="h-4 w-7 shrink-0 rounded border border-orange-700 bg-orange-600/80" />
-                      <span>MNDWI above threshold</span>
-                    </div>
+
+                    <p>
+                      Check the data status below and consult official IMD bulletins
+                      before making operational decisions.
+                    </p>
                   </div>
                 )}
 
@@ -1330,7 +1306,7 @@ function Dashboard() {
                       {historicalLayerError}
                     </p>
                   )}
-                  {mapMode === "sentinel2-satellite" && sentinel2Status.loading && (
+                  {/* {mapMode === "sentinel2-satellite" && sentinel2Status.loading && (
                     <p className="mt-3 text-xs text-blue-700" role="status">
                       Loading Sentinel-2 imagery…
                     </p>
@@ -1339,25 +1315,54 @@ function Dashboard() {
                     <p role="alert" className="mt-3 text-xs text-red-700">
                       {sentinel2Status.error}
                     </p>
+                  )} */}
+
+                  {mapMode === "satellite-alerts" && imdStatus.loading && (
+                    <p className="mt-3 text-xs text-blue-700" role="status">
+                      Loading IMD warnings and cyclone data…
+                    </p>
                   )}
+
+                  {mapMode === "satellite-alerts" && imdStatus.updatedAt && (
+                    <p className="mt-3 text-xs text-slate-500">
+                      IMD data updated{" "}
+                      {new Date(imdStatus.updatedAt).toLocaleTimeString()}
+                    </p>
+                  )}
+
+                  {mapMode === "satellite-alerts" && imdStatus.counts && (
+                    <div className="mt-3 space-y-1 text-xs text-slate-600">
+                      <p>District warnings: {imdStatus.counts.districtWarnings}</p>
+                      <p>Cyclone wind features: {imdStatus.counts.cycloneWind}</p>
+                      <p>Cyclone track features: {imdStatus.counts.cycloneTrack}</p>
+                    </div>
+                  )}
+
+                  {mapMode === "satellite-alerts" && imdStatus.error && (
+                    <p role="alert" className="mt-3 text-xs text-amber-700">
+                      {imdStatus.error}
+                    </p>
+                  )}
+
                 </div>
                 <div className="mt-auto pt-5">
                   <a
-                    href={mapMode === "rainfall"
-                      ? "https://open-meteo.com/"
-                      : mapMode === "sentinel2-satellite"
-                        ? "https://dataspace.copernicus.eu/"
-                        : "https://bhuvan-ras2.nrsc.gov.in/cgi-bin/flood.exe?SERVICE=WMS&REQUEST=GetCapabilities"}
+                    href={
+                      mapMode === "rainfall"
+                        ? "https://open-meteo.com/"
+                        : mapMode === "historical"
+                          ? "https://bhuvan-ras2.nrsc.gov.in/cgi-bin/flood.exe?SERVICE=WMS&REQUEST=GetCapabilities"
+                          : "https://mausam.imd.gov.in/"
+                    }
                     target="_blank"
                     rel="noreferrer"
                     className="inline-block text-xs font-medium text-blue-700 hover:underline"
                   >
                     {mapMode === "rainfall"
                       ? "Free forecast data by Open-Meteo"
-                      : mapMode === "sentinel2-satellite"
-
-                        ? "Copernicus Data Space Ecosystem"
-                        : "NRSC Bhuvan flood WMS capabilities"}
+                      : mapMode === "historical"
+                        ? "NRSC Bhuvan flood WMS capabilities"
+                        : "India Meteorological Department"}
                   </a>
                 </div>
 
